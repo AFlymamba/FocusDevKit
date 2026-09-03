@@ -1,0 +1,28 @@
+{
+  "name": "@devkit/plugin-commit-rules",
+  "version": "0.1.0",
+  "description": "提交信息规则插件：按可配置规则注入或跳过 AI 前缀",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@devkit/sdk": "*"
+  },
+  "devkit": {
+    "id": "commit-rules",
+    "apiVersion": 1,
+    "hooks": ["commit-msg"],
+    "commands": ["check"],
+    "permissions": ["events:write", "git:read", "fs:repo", "proc:exec"]
+  }
+}

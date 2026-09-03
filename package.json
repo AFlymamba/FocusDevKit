@@ -1,0 +1,22 @@
+{
+  "name": "devkit-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build -w @devkit/sdk && npm run build -w @devkit/core && npm run build -w @devkit/cli && npm run build -w @devkit/plugin-commit-rules",
+    "clean": "rimraf packages/*/dist 2>/dev/null || true",
+    "test": "node --test packages/core/test/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "yaml": "^2.5.0"
+  }
+}

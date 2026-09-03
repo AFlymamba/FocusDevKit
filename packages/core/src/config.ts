@@ -1,0 +1,113 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { parse as parseYaml } from 'yaml'
+import { paths, REPO_CONFIG_FILE, readTextIfExists } from './paths.js'
+
+export interface DevkitConfig {
+  server: {
+    url: string | null
+    mock: boolean
+    timeoutMs: number
+  }
+  telemetry: {
+    enabled: boolean
+  }
+  hooks: {
+    /** hook 内单个插件的硬超时。超时即跳过，不阻断 git 操作 */
+    timeoutMs: number
+  }
+  plugins: Record<string, { enabled?: boolean } & Record<string, unknown>>
+}
+
+const DEFAULT_CONFIG: DevkitConfig = {
+  server: { url: null, mock: true, timeoutMs: 3000 },
+  telemetry: { enabled: true },
+  hooks: { timeoutMs: 1000 },
+  plugins: {},
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** 数组整体替换，对象递归合并 */
+function deepMerge<T>(base: T, patch: unknown): T {
+  if (patch === undefined) return base
+  if (Array.isArray(patch)) return patch as unknown as T
+  if (!isPlainObject(base) || !isPlainObject(patch)) return patch as unknown as T
+  const out: Record<string, unknown> = { ...base }
+  for (const [key, value] of Object.entries(patch)) {
+    out[key] = key in out ? deepMerge(out[key], value) : value
+  }
+  return out as T
+}
+
+export interface ConfigLayer {
+  name: string
+  path?: string
+  applied: boolean
+}
+
+export interface LoadedConfig {
+  config: DevkitConfig
+  layers: ConfigLayer[]
+}
+
+function readYamlFile(file: string): unknown {
+  const text = readTextIfExists(file)
+  if (text == null || text.trim() === '') return undefined
+  try {
+    return parseYaml(text)
+  } catch {
+    return undefined
+  }
+}
+
+export function loadConfig(repoRoot: string | null): LoadedConfig {
+  const layers: ConfigLayer[] = []
+  let config = DEFAULT_CONFIG
+
+  const globalFile = paths.globalConfig
+  const globalRaw = readYamlFile(globalFile)
+  layers.push({ name: 'global', path: globalFile, applied: globalRaw !== undefined })
+  if (globalRaw !== undefined) config = deepMerge(config, globalRaw)
+
+  const repoFile = repoRoot == null ? null : path.join(repoRoot, REPO_CONFIG_FILE)
+  const repoRaw = repoFile == null ? undefined : readYamlFile(repoFile)
+  layers.push({ name: 'repo', path: repoFile ?? undefined, applied: repoRaw !== undefined })
+  if (repoRaw !== undefined) config = deepMerge(config, repoRaw)
+
+  // 环境变量覆盖：只覆盖标量，避免 ENV 表达复杂结构
+  const envUrl = process.env.DEVKIT_SERVER_URL
+  if (envUrl) {
+    config = deepMerge(config, { server: { url: envUrl, mock: false } })
+  }
+  if (process.env.DEVKIT_SERVER_MOCK === '1') {
+    config = deepMerge(config, { server: { mock: true } })
+  }
+  if (process.env.DEVKIT_TELEMETRY === '0') {
+    config = deepMerge(config, { telemetry: { enabled: false } })
+  }
+  const hookTimeout = Number(process.env.DEVKIT_HOOK_TIMEOUT_MS)
+  if (Number.isFinite(hookTimeout) && hookTimeout > 0) {
+    config = deepMerge(config, { hooks: { timeoutMs: hookTimeout } })
+  }
+  layers.push({ name: 'env', applied: true })
+
+  return { config, layers }
+}
+
+export function pluginConfig(config: DevkitConfig, pluginId: string): Record<string, unknown> {
+  return config.plugins[pluginId] ?? {}
+}
+
+export function isPluginEnabled(config: DevkitConfig, pluginId: string): boolean {
+  return config.plugins[pluginId]?.enabled !== false
+}
+
+export function writeGlobalConfig(patch: Record<string, unknown>): void {
+  const existing = (readYamlFile(paths.globalConfig) as Record<string, unknown>) ?? {}
+  const merged = deepMerge(existing, patch)
+  fs.mkdirSync(paths.home, { recursive: true })
+  fs.writeFileSync(paths.globalConfig, JSON.stringify(merged, null, 2), 'utf8')
+}
