@@ -1,5 +1,5 @@
 {
-  "name": "devkit-monorepo",
+  "name": "fxdevkit-monorepo",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "npm run build -w @devkit/sdk && npm run build -w @devkit/core && npm run build -w @devkit/cli && npm run build -w @devkit/plugin-commit-rules",
+    "build": "npm run build -w @fxdevkit/sdk && npm run build -w @fxdevkit/core && npm run build -w @fxdevkit/cli && npm run build -w @fxdevkit/plugin-commit-rules",
     "clean": "rimraf packages/*/dist 2>/dev/null || true",
     "test": "node --test packages/core/test/*.test.js"
   },

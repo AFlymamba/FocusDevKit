@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
-import { definePlugin } from '@devkit/sdk'
+import { definePlugin } from '@fxdevkit/sdk'
 
 type RuleAction = 'skip' | 'prefix' | 'suffix' | 'template'
 

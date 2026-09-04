@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { ensureDir, paths } from './paths.js'
 
-export interface DevkitEvent {
+export interface FxDevkitEvent {
   ts: string
   plugin: string
   type: string
@@ -21,7 +21,7 @@ export interface EmitterScope {
 export interface Subscription {
   pluginId: string
   pattern: string
-  handler: (event: DevkitEvent) => void | Promise<void>
+  handler: (event: FxDevkitEvent) => void | Promise<void>
 }
 
 function monthFile(date: Date): string {
@@ -30,7 +30,7 @@ function monthFile(date: Date): string {
 }
 
 /** 落盘。任何失败都必须静默 —— 统计丢了可以补，提交断了不行 */
-function append(event: DevkitEvent, date: Date): void {
+function append(event: FxDevkitEvent, date: Date): void {
   try {
     ensureDir(paths.events)
     fs.appendFileSync(monthFile(date), `${JSON.stringify(event)}\n`, 'utf8')
@@ -39,7 +39,7 @@ function append(event: DevkitEvent, date: Date): void {
   }
 }
 
-export function matchesPattern(pattern: string, event: DevkitEvent): boolean {
+export function matchesPattern(pattern: string, event: FxDevkitEvent): boolean {
   if (pattern === '*') return true
   const target = `${event.plugin}.${event.type}`
   if (pattern === target) return true
@@ -67,7 +67,7 @@ export class EventBus {
   emitterFor(pluginId: string): Emitter {
     return (type, payload = {}) => {
       const now = new Date()
-      const event: DevkitEvent = {
+      const event: FxDevkitEvent = {
         ts: now.toISOString(),
         plugin: pluginId,
         type,
@@ -81,7 +81,7 @@ export class EventBus {
   }
 
   /** fire-and-forget，但记录 promise 供 drain 等待，避免命令结束被截断 */
-  private dispatch(event: DevkitEvent): void {
+  private dispatch(event: FxDevkitEvent): void {
     for (const subscription of this.subscriptions) {
       if (!matchesPattern(subscription.pattern, event)) continue
       this.pending.push(
@@ -125,7 +125,7 @@ export function createSilentEmitter(): Emitter {
   return () => {}
 }
 
-export function readEvents(month: string): DevkitEvent[] {
+export function readEvents(month: string): FxDevkitEvent[] {
   const file = path.join(paths.events, `${month}.jsonl`)
   try {
     if (!fs.existsSync(file)) return []
@@ -133,7 +133,7 @@ export function readEvents(month: string): DevkitEvent[] {
       .readFileSync(file, 'utf8')
       .split('\n')
       .filter((line) => line.trim() !== '')
-      .map((line) => JSON.parse(line) as DevkitEvent)
+      .map((line) => JSON.parse(line) as FxDevkitEvent)
   } catch {
     return []
   }

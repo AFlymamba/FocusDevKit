@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { ServerClient } from '@devkit/sdk'
-import type { Logger } from '@devkit/sdk'
+import type { ServerClient } from '@fxdevkit/sdk'
+import type { Logger } from '@fxdevkit/sdk'
 import { ensureDir, paths, readJsonIfExists } from './paths.js'
 
 export interface ServerOptions {

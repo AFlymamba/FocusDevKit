@@ -5,8 +5,8 @@ import type {
   HookOutcome,
   Logger,
   PluginDefinition,
-} from '@devkit/sdk'
-import { type DevkitConfig, isPluginEnabled, loadConfig, pluginConfig } from './config.js'
+} from '@fxdevkit/sdk'
+import { type FxDevkitConfig, isPluginEnabled, loadConfig, pluginConfig } from './config.js'
 import {
   consumeAmendState,
   detectGitContext,
@@ -27,11 +27,11 @@ import { createDeniedServer, createServerClient } from './server.js'
 export function createLogger(verbose = false): Logger {
   // 一律走 stderr：git hook 的 stdout 有时会被 git 消费
   const write = (level: string, message: string): void => {
-    process.stderr.write(`[devkit] ${level} ${message}\n`)
+    process.stderr.write(`[fxdevkit] ${level} ${message}\n`)
   }
   return {
     debug: (m) => {
-      if (verbose || process.env.DEVKIT_DEBUG === '1') write('debug', m)
+      if (verbose || process.env.FXDEVKIT_DEBUG === '1') write('debug', m)
     },
     info: (m) => write('info', m),
     warn: (m) => write('warn', m),
@@ -160,7 +160,7 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
 async function registerSubscriptions(
   bus: EventBus,
   repoRoot: string | null,
-  config: DevkitConfig,
+  config: FxDevkitConfig,
   logger: Logger,
 ): Promise<void> {
   for (const discovered of discoverPlugins(repoRoot)) {

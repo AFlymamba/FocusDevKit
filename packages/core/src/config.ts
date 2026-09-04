@@ -3,7 +3,7 @@ import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { paths, REPO_CONFIG_FILE, readTextIfExists } from './paths.js'
 
-export interface DevkitConfig {
+export interface FxDevkitConfig {
   server: {
     url: string | null
     mock: boolean
@@ -19,7 +19,7 @@ export interface DevkitConfig {
   plugins: Record<string, { enabled?: boolean } & Record<string, unknown>>
 }
 
-const DEFAULT_CONFIG: DevkitConfig = {
+const DEFAULT_CONFIG: FxDevkitConfig = {
   server: { url: null, mock: true, timeoutMs: 3000 },
   telemetry: { enabled: true },
   hooks: { timeoutMs: 1000 },
@@ -49,7 +49,7 @@ export interface ConfigLayer {
 }
 
 export interface LoadedConfig {
-  config: DevkitConfig
+  config: FxDevkitConfig
   layers: ConfigLayer[]
 }
 
@@ -78,17 +78,17 @@ export function loadConfig(repoRoot: string | null): LoadedConfig {
   if (repoRaw !== undefined) config = deepMerge(config, repoRaw)
 
   // 环境变量覆盖：只覆盖标量，避免 ENV 表达复杂结构
-  const envUrl = process.env.DEVKIT_SERVER_URL
+  const envUrl = process.env.FXDEVKIT_SERVER_URL
   if (envUrl) {
     config = deepMerge(config, { server: { url: envUrl, mock: false } })
   }
-  if (process.env.DEVKIT_SERVER_MOCK === '1') {
+  if (process.env.FXDEVKIT_SERVER_MOCK === '1') {
     config = deepMerge(config, { server: { mock: true } })
   }
-  if (process.env.DEVKIT_TELEMETRY === '0') {
+  if (process.env.FXDEVKIT_TELEMETRY === '0') {
     config = deepMerge(config, { telemetry: { enabled: false } })
   }
-  const hookTimeout = Number(process.env.DEVKIT_HOOK_TIMEOUT_MS)
+  const hookTimeout = Number(process.env.FXDEVKIT_HOOK_TIMEOUT_MS)
   if (Number.isFinite(hookTimeout) && hookTimeout > 0) {
     config = deepMerge(config, { hooks: { timeoutMs: hookTimeout } })
   }
@@ -97,11 +97,11 @@ export function loadConfig(repoRoot: string | null): LoadedConfig {
   return { config, layers }
 }
 
-export function pluginConfig(config: DevkitConfig, pluginId: string): Record<string, unknown> {
+export function pluginConfig(config: FxDevkitConfig, pluginId: string): Record<string, unknown> {
   return config.plugins[pluginId] ?? {}
 }
 
-export function isPluginEnabled(config: DevkitConfig, pluginId: string): boolean {
+export function isPluginEnabled(config: FxDevkitConfig, pluginId: string): boolean {
   return config.plugins[pluginId]?.enabled !== false
 }
 

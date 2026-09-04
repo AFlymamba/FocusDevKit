@@ -2,22 +2,22 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-export const DEVKit_HOME = process.env.DEVKIT_HOME
-  ? path.resolve(process.env.DEVKIT_HOME)
-  : path.join(os.homedir(), '.devkit')
+export const FXDEVKIT_HOME = process.env.FXDEVKIT_HOME
+  ? path.resolve(process.env.FXDEVKIT_HOME)
+  : path.join(os.homedir(), '.fxdevkit')
 
 export const paths = {
-  home: DEVKit_HOME,
-  hooks: path.join(DEVKit_HOME, 'hooks'),
-  events: path.join(DEVKit_HOME, 'events'),
-  cache: path.join(DEVKit_HOME, 'cache'),
-  plugins: path.join(DEVKit_HOME, 'plugins'),
-  mockServer: path.join(DEVKit_HOME, 'mock-server'),
-  globalConfig: path.join(DEVKit_HOME, 'config.yaml'),
-  devices: path.join(DEVKit_HOME, 'device.json'),
+  home: FXDEVKIT_HOME,
+  hooks: path.join(FXDEVKIT_HOME, 'hooks'),
+  events: path.join(FXDEVKIT_HOME, 'events'),
+  cache: path.join(FXDEVKIT_HOME, 'cache'),
+  plugins: path.join(FXDEVKIT_HOME, 'plugins'),
+  mockServer: path.join(FXDEVKIT_HOME, 'mock-server'),
+  globalConfig: path.join(FXDEVKIT_HOME, 'config.yaml'),
+  devices: path.join(FXDEVKIT_HOME, 'device.json'),
 }
 
-export const REPO_CONFIG_FILE = '.devkit.yaml'
+export const REPO_CONFIG_FILE = '.fxdevkit.yaml'
 
 export function ensureDir(target: string): void {
   fs.mkdirSync(target, { recursive: true })

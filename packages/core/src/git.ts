@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import type { GitContext } from '@devkit/sdk'
+import type { GitContext } from '@fxdevkit/sdk'
 import { paths, readJsonIfExists } from './paths.js'
 
 function run(args: string[], cwd: string): string | null {

@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import type { HookName } from '@devkit/sdk'
+import type { HookName } from '@fxdevkit/sdk'
 import { ensureLayout, paths } from './paths.js'
 
 export const MANAGED_HOOKS: HookName[] = [
@@ -24,7 +24,7 @@ export const MANAGED_HOOKS: HookName[] = [
 function dispatcherScript(hookName: string, nodePath: string, cliEntry: string): string {
   return [
     '#!/bin/sh',
-    `# managed by dev-kit · ${hookName}`,
+    `# managed by fxDevKit · ${hookName}`,
     `"${nodePath}" "${cliEntry}" hook ${hookName} "$@"`,
     'code=$?',
     '[ "$code" -eq 1 ] && exit 1',

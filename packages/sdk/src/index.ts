@@ -1,5 +1,5 @@
 /**
- * dev-kit 插件协议
+ * fxDevKit 插件协议
  *
  * 约定：插件只依赖本包。内核据此加载、隔离、授权，不关心插件做什么。
  *
@@ -26,7 +26,13 @@ export type Permission =
   | 'proc:exec'
 
 export interface PluginManifest {
+  /** 内部唯一标识，用于配置键与事件记录 */
   id: string
+  /**
+   * 命令行短名，全局唯一，用于 `fxdevkit <name> ...`。
+   * 未声明时取 id。要求简短好记，不得与 fxdevkit 内置命令同名。
+   */
+  name?: string
   /** 插件协议版本。内核不兼容时跳过并告警 */
   apiVersion: number
   hooks?: HookName[]

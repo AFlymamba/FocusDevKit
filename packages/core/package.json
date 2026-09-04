@@ -1,7 +1,7 @@
 {
-  "name": "@devkit/core",
+  "name": "@fxdevkit/core",
   "version": "0.1.0",
-  "description": "dev-kit 微内核：插件管理、配置、钩子托管、事件、Server 客户端",
+  "description": "fxDevKit 微内核：插件管理、配置、钩子托管、事件、Server 客户端",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,7 +16,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@devkit/sdk": "*",
+    "@fxdevkit/sdk": "*",
     "yaml": "^2.6.0"
   }
 }
