@@ -22,7 +22,9 @@ import {
   permissionSet,
   selectPlugins,
 } from './plugins.js'
+import { isRepoEnabled, runRepoOwnHook } from './hooks.js'
 import { createDeniedServer, createServerClient } from './server.js'
+import { pluginScope } from './scope.js'
 
 export function createLogger(verbose = false): Logger {
   // 一律走 stderr：git hook 的 stdout 有时会被 git 消费
@@ -64,14 +66,31 @@ function errorMessage(error: unknown): string {
 /**
  * 派发一个 git hook 给所有声明了它的插件。
  *
- * 熔断原则：本函数在任何异常路径下都返回 0（放行）。
- * 只有插件显式返回 'reject' 才会返回 1。
+ * 分层执行（参照配置分层的「项目级优先、用户级兜底」）：
+ *   ① 仓库自有 hook（<repo>/.git/hooks/<name>）先跑 —— 全局 hooksPath 接管后
+ *      git 不再执行它们，这里补执行，保证「不取缔、只追加」。失败即阻断。
+ *   ② 本仓库是否启用了增强（总开关）—— 未启用则到此为止。
+ *   ③ 插件派发 —— 再按作用目录（projects）过滤。
+ *
+ * 熔断原则：异常路径一律返回 0（放行）。只有以下两种情况返回 1：
+ *   仓库自有 hook 执行失败，或插件显式返回 'reject'。
  */
 export async function dispatchHook(hookName: HookName, args: string[]): Promise<number> {
   const logger = createLogger()
   try {
     const cwd = process.cwd()
     const repoRoot = findRepoRoot(cwd)
+
+    // ① 项目级优先：仓库自有 hook。不存在则跳过（返回 null）
+    if (repoRoot) {
+      const ownCode = runRepoOwnHook(repoRoot, hookName, args)
+      if (ownCode != null && ownCode !== 0) return 1
+    }
+
+    // ② 总开关：未启用的仓库不被增强（但仓库自有 hook 已执行，不受影响）
+    if (!repoRoot) return 0
+    if (!isRepoEnabled(repoRoot)) return 0
+
     const { config } = loadConfig(repoRoot)
 
     // amend 只能在 prepare-commit-msg 判定，这里落状态供 commit-msg 消费
@@ -92,6 +111,13 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
         continue
       }
       if (!isPluginEnabled(config, discovered.id)) continue
+
+      // 作用目录判定：插件未配 projects 时全局生效，配了则只在该目录（含子目录）下加载
+      const scope = pluginScope(config, discovered.id, repoRoot)
+      if (!scope.inScope) {
+        logger.debug(`[${discovered.id}] ${scope.reason}，已跳过`)
+        continue
+      }
 
       const definition: PluginDefinition<any> | null = await loadPlugin(discovered)
       if (!definition) {

@@ -5,19 +5,25 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import YAML from 'yaml'
 import {
+  disableRepo,
   dispatchHook,
   discoverPlugins,
+  enableRepo,
   findRepoRoot,
-  installHooks,
+  getGlobalHooksPath,
+  installGlobalHooks,
+  isGlobalInstalled,
+  isRepoEnabled,
   listEventMonths,
   loadConfig,
   loadPlugin,
   needsReinstall,
   paths,
   pluginConfig,
+  pluginScope,
   readEvents,
   runPluginCommand,
-  uninstallHooks,
+  uninstallGlobalHooks,
 } from '@fxdevkit/core'
 import type { DiscoveredWithReason } from '@fxdevkit/core'
 import type { HookName } from '@fxdevkit/sdk'
@@ -76,27 +82,53 @@ function runNpm(args: string[], cwd: string): void {
   execFileSync('npm', args, { cwd, stdio: 'inherit' })
 }
 
-function cmdInstall(): number {
-  const cwd = process.cwd()
-  const repoRoot = findRepoRoot(cwd)
+function wantsGlobal(rest: string[]): boolean {
+  return rest.includes('--global') || rest.includes('-g')
+}
+
+/**
+ * 安装分两层：
+ *   --global  装全局 hooks（一次）：所有仓库都会走 dispatcher
+ *   不带参数  在当前仓库启用增强：只有启用的仓库才真正被插件增强
+ */
+function cmdInstall(rest: string[]): number {
+  if (wantsGlobal(rest)) {
+    const result = installGlobalHooks(nodePath, cliEntry)
+    process.stdout.write(`[fxdevkit] 全局 hooks 已安装：${result.hooksDir}\n`)
+    process.stdout.write(`[fxdevkit] 已托管：${result.installed.join(', ')}\n`)
+    process.stdout.write('[fxdevkit] 所有仓库（含以后新建的）现在都会走 dispatcher\n')
+    process.stdout.write('[fxdevkit] 但只有显式启用的仓库会被增强 → 在仓库内执行 fxdevkit install\n')
+    return 0
+  }
+
+  const repoRoot = findRepoRoot(process.cwd())
   if (!repoRoot) {
     process.stderr.write('[fxdevkit] 当前目录不在 git 仓库中\n')
     return 1
   }
-  const result = installHooks(repoRoot, nodePath, cliEntry)
+  const result = enableRepo(repoRoot, nodePath, cliEntry)
+  process.stdout.write(`[fxdevkit] 本仓库已启用增强：${repoRoot}\n`)
   process.stdout.write(`[fxdevkit] hooks 目录：${result.hooksDir}\n`)
-  process.stdout.write(`[fxdevkit] 已托管：${result.installed.join(', ')}\n`)
-  if (result.previousHooksPath) {
-    process.stdout.write(`[fxdevkit] 原 core.hooksPath：${result.previousHooksPath}（已被覆盖）\n`)
+  if (result.migratedFromRepoHooksPath) {
+    process.stdout.write(
+      `[fxdevkit] 已迁移：清除本仓库旧的 core.hooksPath=${result.migratedFromRepoHooksPath}\n`,
+    )
   }
   return 0
 }
 
-function cmdUninstall(): number {
+function cmdUninstall(rest: string[]): number {
+  if (wantsGlobal(rest)) {
+    uninstallGlobalHooks()
+    process.stdout.write('[fxdevkit] 已卸载全局 hooks，所有仓库均不再被增强\n')
+    return 0
+  }
+
   const repoRoot = findRepoRoot(process.cwd())
   if (!repoRoot) return 1
-  uninstallHooks(repoRoot)
-  process.stdout.write('[fxdevkit] 已卸载 hooks\n')
+  disableRepo(repoRoot)
+  process.stdout.write(`[fxdevkit] 本仓库已停用增强：${repoRoot}\n`)
+  process.stdout.write('[fxdevkit] 全局 hooks 保留，其他已启用的仓库不受影响\n')
   return 0
 }
 
@@ -273,17 +305,6 @@ function doctorLine(label: string, value: string, ok: boolean, hint?: string): b
   return ok
 }
 
-function currentHooksPath(repoRoot: string): string | null {
-  try {
-    const out = execFileSync('git', ['-C', repoRoot, 'config', '--get', 'core.hooksPath'], {
-      encoding: 'utf8',
-    }).trim()
-    return out === '' ? null : out
-  } catch {
-    return null
-  }
-}
-
 function checkDispatcher(): { ok: boolean; detail: string; hint?: string } {
   const script = path.join(paths.hooks, 'commit-msg')
   if (!fs.existsSync(script)) {
@@ -330,21 +351,32 @@ async function cmdDoctor(): Promise<number> {
     ) && healthy
 
   if (repoRoot) {
-    const hooksPath = currentHooksPath(repoRoot)
-    const managed =
-      hooksPath != null &&
-      path.resolve(hooksPath).toLowerCase() === path.resolve(paths.hooks).toLowerCase()
+    // ① 全局 hooks：决定「所有仓库都会不会走 dispatcher」
+    const globalHooks = getGlobalHooksPath()
+    const globalOk = isGlobalInstalled()
     healthy =
       doctorLine(
-        'hooks 托管',
-        hooksPath ?? '未托管',
-        managed,
-        managed ? undefined : '执行 fxdevkit install 挂载 hooks，否则提交不会被增强',
+        '全局 hooks',
+        globalHooks ?? '未安装',
+        globalOk,
+        globalOk ? undefined : '执行 fxdevkit install --global 安装全局 hooks',
+      ) && healthy
+
+    // ② 本仓库总开关：决定「这个仓库会不会真的被增强」
+    const enabled = isRepoEnabled(repoRoot)
+    healthy =
+      doctorLine(
+        '本仓库增强',
+        enabled ? '已启用' : '未启用',
+        enabled,
+        enabled ? undefined : '执行 fxdevkit install 在本仓库启用增强',
       ) && healthy
 
     const dispatcher = checkDispatcher()
     healthy = doctorLine('入口有效', dispatcher.detail, dispatcher.ok, dispatcher.hint) && healthy
 
+    // ③ 插件：再按作用目录过滤
+    const { config } = loadConfig(repoRoot)
     const plugins = discoverPlugins(repoRoot)
     if (plugins.length === 0) {
       process.stdout.write('[fxdevkit] 未发现任何插件\n')
@@ -354,6 +386,14 @@ async function cmdDoctor(): Promise<number> {
         healthy = doctorLine(`插件 ${discovered.id}`, '已跳过', false, discovered.skipped) && healthy
         continue
       }
+
+      const scope = pluginScope(config, discovered.id, repoRoot)
+      if (!scope.inScope) {
+        // 用户显式配了作用目录，不在范围内是预期结果，不算故障
+        doctorLine(`插件 ${discovered.id}`, '未生效（不在作用目录）', true, scope.reason)
+        continue
+      }
+
       let loaded = false
       let detail = '加载成功'
       try {
@@ -383,10 +423,12 @@ function renderHelp(): string {
     `${SELF.name} ${SELF.version} — 研发动作背后的插件化增强层`,
     '',
     '用法:',
-    '  fxdevkit status                   查看当前状态：版本 / hooks / 插件',
+    '  fxdevkit status                   查看当前状态：全局 hooks / 本仓库启用 / 插件',
     '  fxdevkit doctor                   检查增强链路是否正常',
-    '  fxdevkit install                  托管 git hooks',
-    '  fxdevkit uninstall                取消 hooks 托管',
+    '  fxdevkit install --global         安装全局 hooks（一次，所有仓库都会走 dispatcher）',
+    '  fxdevkit install                  在当前仓库启用增强（未装全局 hooks 时会自动装）',
+    '  fxdevkit uninstall                在当前仓库停用增强',
+    '  fxdevkit uninstall --global       卸载全局 hooks，所有仓库均不再增强',
     '  fxdevkit self version             查看 fxdevkit 版本',
     '  fxdevkit self update              更新 fxdevkit 到最新版',
     '  fxdevkit self rollback <version>  回退 fxdevkit 到指定版本',
@@ -424,14 +466,20 @@ function renderHelp(): string {
 async function cmdStatus(): Promise<number> {
   process.stdout.write(`[fxdevkit] ${SELF.name} ${SELF.version} · Node ${process.version}\n`)
 
+  // 全局层：决定所有仓库是否走 dispatcher
+  const globalOk = isGlobalInstalled()
+  process.stdout.write(
+    `[fxdevkit] 全局 hooks ${globalOk ? `已安装 · ${paths.hooks}` : '未安装（fxdevkit install --global）'}\n`,
+  )
+
+  // 仓库层：决定本仓库是否真的被增强
   const repoRoot = findRepoRoot(process.cwd())
   if (repoRoot) {
-    const hooksPath = currentHooksPath(repoRoot)
-    const managed =
-      hooksPath != null &&
-      path.resolve(hooksPath).toLowerCase() === path.resolve(paths.hooks).toLowerCase()
+    const enabled = isRepoEnabled(repoRoot)
     process.stdout.write(`[fxdevkit] 仓库 ${repoRoot}\n`)
-    process.stdout.write(`[fxdevkit] hooks ${managed ? '已托管' : '未托管，提交不会被增强'}\n`)
+    process.stdout.write(
+      `[fxdevkit] 增强 ${enabled ? '已启用' : '未启用，提交不会被增强（fxdevkit install）'}\n`,
+    )
   } else {
     process.stdout.write('[fxdevkit] 当前目录不在 git 仓库中\n')
   }
@@ -442,12 +490,16 @@ async function cmdStatus(): Promise<number> {
     return 0
   }
 
+  const { config } = loadConfig(repoRoot)
   process.stdout.write('[fxdevkit] 插件:\n')
   for (const plugin of plugins) {
+    const scope = pluginScope(config, plugin.id, repoRoot)
+    const state = plugin.skipped ? 'SKIPPED' : scope.inScope ? 'ok' : '未生效'
     process.stdout.write(
-      `  ${pad(plugin.name, 14)}${pad(`${plugin.id}@${plugin.version}`, 30)}${plugin.skipped ? 'SKIPPED' : 'ok'}\n`,
+      `  ${pad(plugin.name, 14)}${pad(`${plugin.id}@${plugin.version}`, 30)}${state}\n`,
     )
     if (plugin.skipped) process.stdout.write(`      → ${plugin.skipped}\n`)
+    else if (!scope.inScope) process.stdout.write(`      → ${scope.reason}\n`)
     for (const ignored of plugin.ignoredVersions ?? []) {
       process.stdout.write(`      已忽略较低版本 ${ignored.version}（${ignored.dir}）\n`)
     }
@@ -464,9 +516,8 @@ function selfInstall(spec: string, action: string): number {
     process.stderr.write(`[fxdevkit] 可手动执行：npm install -g ${spec}\n`)
     return 1
   }
-  // 自身路径可能已变，重建 hooks，避免 dispatcher 指向失效入口
-  const repoRoot = findRepoRoot(process.cwd())
-  if (repoRoot) installHooks(repoRoot, nodePath, cliEntry)
+  // 自身路径可能已变，重建全局 hooks，避免 dispatcher 指向失效入口
+  installGlobalHooks(nodePath, cliEntry)
   process.stdout.write(`[fxdevkit] ${action}完成：${spec}\n`)
   return 0
 }
@@ -493,11 +544,9 @@ function cmdSelf(rest: string[]): number {
     }
 
     case 'uninstall': {
-      const repoRoot = findRepoRoot(process.cwd())
-      if (repoRoot) {
-        uninstallHooks(repoRoot)
-        process.stdout.write('[fxdevkit] 已取消 hooks 托管\n')
-      }
+      // fxdevkit 自身要移除，全局 hooks 必须一起清掉，否则所有仓库的提交都会失败
+      uninstallGlobalHooks()
+      process.stdout.write('[fxdevkit] 已卸载全局 hooks\n')
       try {
         runNpm(['uninstall', '-g', SELF.name], path.dirname(paths.home))
         process.stdout.write(`[fxdevkit] 已卸载 ${SELF.name}\n`)
@@ -579,10 +628,10 @@ async function main(): Promise<number> {
       return await cmdStatus()
 
     case 'install':
-      return cmdInstall()
+      return cmdInstall(rest)
 
     case 'uninstall':
-      return cmdUninstall()
+      return cmdUninstall(rest)
 
     case 'self':
       return cmdSelf(rest)
@@ -602,9 +651,11 @@ async function main(): Promise<number> {
     case 'hook': {
       const [name, ...args] = rest
       if (!isHookName(name)) return 0
+      // 自愈：clone 后全局 hooks 若丢失，只在本仓库「已启用」时重装。
+      // 新克隆的仓库默认未启用，不该被自动装上增强。
       if (name === 'post-checkout' && needsReinstall()) {
         const repoRoot = findRepoRoot(process.cwd())
-        if (repoRoot) installHooks(repoRoot, nodePath, cliEntry)
+        if (repoRoot && isRepoEnabled(repoRoot)) installGlobalHooks(nodePath, cliEntry)
       }
       return dispatchHook(name, args)
     }

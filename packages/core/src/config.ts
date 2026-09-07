@@ -3,6 +3,19 @@ import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { paths, REPO_CONFIG_FILE, readTextIfExists } from './paths.js'
 
+export interface PluginSettings {
+  enabled?: boolean
+  /**
+   * 作用目录（含其所有子目录）。
+   *
+   * - 未设置 / 空数组 → 全局生效：所有已启用 fxdevkit 的仓库都加载该插件
+   * - 设置了 → 只有仓库根目录位于其中某个目录下（含子目录）才加载
+   *
+   * 判定由内核完成，插件自身不感知，也不该自己读这个字段。
+   */
+  projects?: string[]
+}
+
 export interface FxDevkitConfig {
   server: {
     url: string | null
@@ -16,7 +29,7 @@ export interface FxDevkitConfig {
     /** hook 内单个插件的硬超时。超时即跳过，不阻断 git 操作 */
     timeoutMs: number
   }
-  plugins: Record<string, { enabled?: boolean } & Record<string, unknown>>
+  plugins: Record<string, PluginSettings & Record<string, unknown>>
 }
 
 const DEFAULT_CONFIG: FxDevkitConfig = {
