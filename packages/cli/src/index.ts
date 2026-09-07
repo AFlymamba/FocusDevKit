@@ -15,6 +15,7 @@ import {
   isGlobalInstalled,
   isRepoEnabled,
   listEventMonths,
+  listLogDays,
   loadConfig,
   loadPlugin,
   needsReinstall,
@@ -22,10 +23,11 @@ import {
   pluginConfig,
   pluginScope,
   readEvents,
+  readLogs,
   runPluginCommand,
   uninstallGlobalHooks,
 } from '@fxdevkit/core'
-import type { DiscoveredWithReason } from '@fxdevkit/core'
+import type { DiscoveredWithReason, LogLevel } from '@fxdevkit/core'
 import type { HookName } from '@fxdevkit/sdk'
 
 const cliEntry = fileURLToPath(import.meta.url)
@@ -88,16 +90,16 @@ function wantsGlobal(rest: string[]): boolean {
 
 /**
  * 安装分两层：
- *   --global  装全局 hooks（一次）：所有仓库都会走 dispatcher
- *   不带参数  在当前仓库启用增强：只有启用的仓库才真正被插件增强
+ *   --global  装全局 hooks（一次）：所有仓库都会走 dispatcher，且默认被增强
+ *   不带参数  显式启用当前仓库（覆盖之前的 fxdevkit uninstall 停用标记）
  */
 function cmdInstall(rest: string[]): number {
   if (wantsGlobal(rest)) {
     const result = installGlobalHooks(nodePath, cliEntry)
     process.stdout.write(`[fxdevkit] 全局 hooks 已安装：${result.hooksDir}\n`)
     process.stdout.write(`[fxdevkit] 已托管：${result.installed.join(', ')}\n`)
-    process.stdout.write('[fxdevkit] 所有仓库（含以后新建的）现在都会走 dispatcher\n')
-    process.stdout.write('[fxdevkit] 但只有显式启用的仓库会被增强 → 在仓库内执行 fxdevkit install\n')
+    process.stdout.write('[fxdevkit] 所有仓库（含以后新建的）现在都会被插件增强\n')
+    process.stdout.write('[fxdevkit] 想排除某个仓库 → 在该仓库内执行 fxdevkit uninstall\n')
     return 0
   }
 
@@ -128,7 +130,7 @@ function cmdUninstall(rest: string[]): number {
   if (!repoRoot) return 1
   disableRepo(repoRoot)
   process.stdout.write(`[fxdevkit] 本仓库已停用增强：${repoRoot}\n`)
-  process.stdout.write('[fxdevkit] 全局 hooks 保留，其他已启用的仓库不受影响\n')
+  process.stdout.write('[fxdevkit] 全局 hooks 保留，其他仓库不受影响\n')
   return 0
 }
 
@@ -289,6 +291,105 @@ async function cmdReport(): Promise<number> {
   return 0
 }
 
+function formatTs(ts: string): string {
+  const d = new Date(ts)
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+function isLogLevelValue(value: string): value is LogLevel {
+  return value === 'debug' || value === 'info' || value === 'warn' || value === 'error'
+}
+
+function renderLogsHelp(): string {
+  return [
+    '用法:',
+    '  fxdevkit logs                    查看今天的全部日志（core + plugin）',
+    '  fxdevkit logs --core             只看内核调度日志',
+    '  fxdevkit logs --plugin <id>      只看某个插件的执行日志',
+    '  fxdevkit logs --level <level>    debug | info | warn | error 及以上',
+    '  fxdevkit logs --day <YYYY-MM-DD> 查看指定日期',
+    '  fxdevkit logs --days             列出有哪些日期的日志文件',
+    '  fxdevkit logs --last <n>         只看最后 n 条',
+    '',
+    '日志文件位置：~/.fxdevkit/logs/YYYY-MM-DD.log（结构化 JSON）',
+  ].join('\n')
+}
+
+function cmdLogs(rest: string[]): number {
+  let channel: 'core' | 'plugin' | undefined
+  let pluginId: string | undefined
+  let level: LogLevel | undefined
+  let day: string | undefined
+  let last: number | undefined
+
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i]
+    if (arg === '--core') {
+      channel = 'core'
+    } else if (arg === '--plugin') {
+      channel = 'plugin'
+      pluginId = rest[++i]
+      if (!pluginId) {
+        process.stderr.write('[fxdevkit] --plugin 需要一个插件 id，如 --plugin commit-rules\n')
+        return 1
+      }
+    } else if (arg === '--level') {
+      const value = rest[++i]
+      if (!isLogLevelValue(value)) {
+        process.stderr.write('[fxdevkit] --level 需为 debug | info | warn | error\n')
+        return 1
+      }
+      level = value
+    } else if (arg === '--day') {
+      day = rest[++i]
+      if (!day) {
+        process.stderr.write('[fxdevkit] --day 需要一个日期，如 --day 2026-09-07\n')
+        return 1
+      }
+    } else if (arg === '--days') {
+      const days = listLogDays()
+      if (days.length === 0) {
+        process.stdout.write('[fxdevkit] 暂无日志\n')
+        return 0
+      }
+      process.stdout.write('[fxdevkit] 日志文件（按天）：\n')
+      for (const d of days) process.stdout.write(`  ${d}\n`)
+      return 0
+    } else if (arg === '--last' || arg === '-n') {
+      const value = rest[++i]
+      const n = Number(value)
+      if (!Number.isInteger(n) || n <= 0) {
+        process.stderr.write('[fxdevkit] --last 需要一个正整数\n')
+        return 1
+      }
+      last = n
+    } else if (arg === '-h' || arg === '--help') {
+      process.stdout.write(renderLogsHelp())
+      return 0
+    } else {
+      process.stderr.write(`[fxdevkit] 未知参数：${arg}\n`)
+      return 1
+    }
+  }
+
+  const records = readLogs({ day, channel, plugin: pluginId, level })
+  if (records.length === 0) {
+    process.stdout.write(`[fxdevkit] ${day ?? '今天'}无匹配日志\n`)
+    return 0
+  }
+
+  const shown = last ? records.slice(-last) : records
+  for (const record of shown) {
+    const label = record.channel === 'core' ? 'core' : `plugin:${record.plugin ?? '?'}`
+    process.stdout.write(`${formatTs(record.ts)}  ${label}  ${record.level.padEnd(5)} ${record.msg}\n`)
+  }
+  if (last && records.length > last) {
+    process.stdout.write(`  … 共 ${records.length} 条，仅显示最后 ${last} 条\n`)
+  }
+  return 0
+}
+
 function displayWidth(text: string): number {
   let width = 0
   for (const ch of text) width += /[一-龥＀-￯]/.test(ch) ? 2 : 1
@@ -362,14 +463,14 @@ async function cmdDoctor(): Promise<number> {
         globalOk ? undefined : '执行 fxdevkit install --global 安装全局 hooks',
       ) && healthy
 
-    // ② 本仓库总开关：决定「这个仓库会不会真的被增强」
+    // ② 本仓库开关：默认启用，只有显式 fxdevkit uninstall 停用的仓库例外
     const enabled = isRepoEnabled(repoRoot)
     healthy =
       doctorLine(
         '本仓库增强',
-        enabled ? '已启用' : '未启用',
-        enabled,
-        enabled ? undefined : '执行 fxdevkit install 在本仓库启用增强',
+        enabled ? '已启用' : '已停用（用户主动）',
+        true,
+        enabled ? undefined : 'fxdevkit install 可重新启用本仓库',
       ) && healthy
 
     const dispatcher = checkDispatcher()
@@ -436,6 +537,7 @@ function renderHelp(): string {
     '  fxdevkit config show              打印合并后的生效配置',
     '  fxdevkit config validate          校验各插件配置',
     '  fxdevkit report                   统计本地事件',
+    '  fxdevkit logs                     查看日志（--core / --plugin <id> / --level / --day）',
     '  fxdevkit help                     显示本帮助',
   ]
 
@@ -472,13 +574,13 @@ async function cmdStatus(): Promise<number> {
     `[fxdevkit] 全局 hooks ${globalOk ? `已安装 · ${paths.hooks}` : '未安装（fxdevkit install --global）'}\n`,
   )
 
-  // 仓库层：决定本仓库是否真的被增强
+  // 仓库层：默认启用，只有显式停用的仓库例外
   const repoRoot = findRepoRoot(process.cwd())
   if (repoRoot) {
     const enabled = isRepoEnabled(repoRoot)
     process.stdout.write(`[fxdevkit] 仓库 ${repoRoot}\n`)
     process.stdout.write(
-      `[fxdevkit] 增强 ${enabled ? '已启用' : '未启用，提交不会被增强（fxdevkit install）'}\n`,
+      `[fxdevkit] 增强 ${enabled ? '已启用' : '已停用（fxdevkit install 可重新启用）'}\n`,
     )
   } else {
     process.stdout.write('[fxdevkit] 当前目录不在 git 仓库中\n')
@@ -648,14 +750,15 @@ async function main(): Promise<number> {
     case 'report':
       return cmdReport()
 
+    case 'logs':
+      return cmdLogs(rest)
+
     case 'hook': {
       const [name, ...args] = rest
       if (!isHookName(name)) return 0
-      // 自愈：clone 后全局 hooks 若丢失，只在本仓库「已启用」时重装。
-      // 新克隆的仓库默认未启用，不该被自动装上增强。
+      // 自愈：clone 后全局 hooks 若丢失，直接重装（默认所有仓库都该被增强）
       if (name === 'post-checkout' && needsReinstall()) {
-        const repoRoot = findRepoRoot(process.cwd())
-        if (repoRoot && isRepoEnabled(repoRoot)) installGlobalHooks(nodePath, cliEntry)
+        installGlobalHooks(nodePath, cliEntry)
       }
       return dispatchHook(name, args)
     }

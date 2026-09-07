@@ -25,21 +25,7 @@ import {
 import { isRepoEnabled, runRepoOwnHook } from './hooks.js'
 import { createDeniedServer, createServerClient } from './server.js'
 import { pluginScope } from './scope.js'
-
-export function createLogger(verbose = false): Logger {
-  // 一律走 stderr：git hook 的 stdout 有时会被 git 消费
-  const write = (level: string, message: string): void => {
-    process.stderr.write(`[fxdevkit] ${level} ${message}\n`)
-  }
-  return {
-    debug: (m) => {
-      if (verbose || process.env.FXDEVKIT_DEBUG === '1') write('debug', m)
-    },
-    info: (m) => write('info', m),
-    warn: (m) => write('warn', m),
-    error: (m) => write('error', m),
-  }
-}
+import { createCoreLogger, createPluginLogger } from './logger.js'
 
 const TIMEOUT_MARK = '__timeout__' as const
 
@@ -76,20 +62,28 @@ function errorMessage(error: unknown): string {
  *   仓库自有 hook 执行失败，或插件显式返回 'reject'。
  */
 export async function dispatchHook(hookName: HookName, args: string[]): Promise<number> {
-  const logger = createLogger()
+  const logger = createCoreLogger()
   try {
     const cwd = process.cwd()
     const repoRoot = findRepoRoot(cwd)
+    logger.info(`派发 ${hookName} · 仓库 ${repoRoot ?? '（非 git 仓库）'}`)
 
     // ① 项目级优先：仓库自有 hook。不存在则跳过（返回 null）
     if (repoRoot) {
       const ownCode = runRepoOwnHook(repoRoot, hookName, args)
-      if (ownCode != null && ownCode !== 0) return 1
+      if (ownCode != null && ownCode !== 0) {
+        logger.warn(`仓库自有 ${hookName} 返回非零，按 git 语义阻断`)
+        return 1
+      }
     }
 
-    // ② 总开关：未启用的仓库不被增强（但仓库自有 hook 已执行，不受影响）
+    // ② 总开关：显式停用（fxdevkit.enabled=false）的仓库不被增强
+    //    但仓库自有 hook 已执行，不受影响
     if (!repoRoot) return 0
-    if (!isRepoEnabled(repoRoot)) return 0
+    if (!isRepoEnabled(repoRoot)) {
+      logger.info('本仓库已停用增强，放行')
+      return 0
+    }
 
     const { config } = loadConfig(repoRoot)
 
@@ -103,6 +97,7 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
     const git = detectGitContext(repoRoot ?? cwd, isAmend)
 
     const candidates = selectPlugins(discoverPlugins(repoRoot), hookName)
+    logger.info(`声明 ${hookName} 的候选插件 ${candidates.length} 个`)
     let rejected = false
 
     for (const discovered of candidates) {
@@ -127,6 +122,7 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
 
       const handler = definition.hooks?.[hookName]
       if (!handler) continue
+      logger.info(`[${discovered.id}] 执行 ${hookName}`)
 
       let pluginConfigValue: unknown
       try {
@@ -138,6 +134,7 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
       }
 
       const permissions = permissionSet(discovered.manifest)
+      const pluginLogger = createPluginLogger(discovered.id)
       const emit = hasPermission(permissions, 'events:write')
         ? createEmitter(discovered.id, { repoRoot, branch: git.branch })
         : createSilentEmitter()
@@ -148,7 +145,7 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
       const context: HookContext<any> = {
         pluginId: discovered.id,
         config: pluginConfigValue,
-        logger,
+        logger: pluginLogger,
         git,
         args,
         messageFile: hookName === 'commit-msg' ? args[0] : undefined,
@@ -170,6 +167,7 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
         continue
       }
       if (outcome === 'reject') rejected = true
+      logger.info(`[${discovered.id}] 完成：${outcome ?? 'accept'}`)
     }
 
     return rejected ? 1 : 0
@@ -230,7 +228,7 @@ export async function runPluginCommand(
   commandName: string,
   argv: string[],
 ): Promise<number> {
-  const logger = createLogger(true)
+  const logger = createCoreLogger(true)
   const cwd = process.cwd()
   const repoRoot = findRepoRoot(cwd)
   const { config } = loadConfig(repoRoot)
@@ -258,11 +256,12 @@ export async function runPluginCommand(
 
   const git = detectGitContext(repoRoot ?? cwd)
   const permissions = permissionSet(discovered.manifest)
+  const pluginLogger = createPluginLogger(pluginId)
 
   const context: CommandContext<any> = {
     pluginId,
     config: pluginConfigValue,
-    logger,
+    logger: pluginLogger,
     git,
     emit: hasPermission(permissions, 'events:write')
       ? createEmitter(pluginId, { repoRoot, branch: git.branch })

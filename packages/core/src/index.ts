@@ -1,4 +1,5 @@
 export * from './paths.js'
+export * from './logger.js'
 export * from './git.js'
 export * from './config.js'
 export * from './plugins.js'

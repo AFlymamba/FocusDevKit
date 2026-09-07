@@ -10,6 +10,7 @@ export const paths = {
   home: FXDEVKIT_HOME,
   hooks: path.join(FXDEVKIT_HOME, 'hooks'),
   events: path.join(FXDEVKIT_HOME, 'events'),
+  logs: path.join(FXDEVKIT_HOME, 'logs'),
   cache: path.join(FXDEVKIT_HOME, 'cache'),
   plugins: path.join(FXDEVKIT_HOME, 'plugins'),
   mockServer: path.join(FXDEVKIT_HOME, 'mock-server'),
@@ -24,7 +25,7 @@ export function ensureDir(target: string): void {
 }
 
 export function ensureLayout(): void {
-  for (const dir of [paths.home, paths.hooks, paths.events, paths.cache, paths.plugins, paths.mockServer]) {
+  for (const dir of [paths.home, paths.hooks, paths.events, paths.logs, paths.cache, paths.plugins, paths.mockServer]) {
     ensureDir(dir)
   }
 }
