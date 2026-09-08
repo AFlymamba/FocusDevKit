@@ -1,7 +1,7 @@
 # commit-rules 插件：工作原理与使用
 
 > 第一个插件。挂在 `git commit` 背后，按**可配置规则**自动改写或校验提交信息。
-> 对应源码：`packages/plugin-commit-rules/src/index.ts`
+> 对应源码：`src/index.ts`
 > 最后更新：2026-09-08
 
 ---
@@ -29,7 +29,7 @@
 插件在 manifest 里声明监听 `commit-msg` 这个 git hook：
 
 ```jsonc
-// packages/plugin-commit-rules/package.json
+// package.json
 "fxdevkit": {
   "id": "commit-rules",
   "name": "commit",
@@ -329,15 +329,15 @@ A：把配置写进**那个仓库的** `<仓库>/.fxdevkit.yaml`（仓库配置�
 
 | 你想找 | 位置 |
 |---|---|
-| 插件全部逻辑 | `packages/plugin-commit-rules/src/index.ts` |
+| 插件全部逻辑 | `src/index.ts` |
 | 默认规则 | 同文件 `DEFAULT_CONFIG`（约 22-30 行） |
 | 规则校验 + 幂等守卫 | 同文件 `normalizeRules` / `assertIdempotent`（约 40-95 行） |
 | commit-msg 处理流程 | 同文件 `hooks['commit-msg']`（约 142-220 行） |
 | check 命令 | 同文件 `commands.check`（约 223-267 行） |
-| 插件声明（manifest） | `packages/plugin-commit-rules/package.json` 的 `fxdevkit` 字段 |
+| 插件声明（manifest） | `package.json` 的 `fxdevkit` 字段 |
 | 配置如何注入插件 | `packages/core/src/kernel.ts`（约 127-134 行） |
 | 配置如何合并（整体替换语义） | `packages/core/src/config.ts` 的 `deepMerge` / `loadConfig` |
 
 ---
 
-> 配套阅读：`概念词典.md`（术语）→ `架构设计.md §3`（插件机制）→ `修改指南.md §1`（怎么加新插件）。
+> 配套阅读：`../docs/概念词典.md`（术语）→ `../docs/架构设计.md §3`（插件机制）→ `../docs/修改指南.md §1`（怎么加新插件）。

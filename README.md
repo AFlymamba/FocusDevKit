@@ -115,6 +115,7 @@ fxdevkit uninstall               # 停用本仓库（设 fxdevkit.enabled=false�
 ## 文档地图（按需读）
 
 > 新人阅读顺序：**本 README → 概念词典 → 命令手册 → 架构设计**。
+> 了解有哪些插件：**插件列表.md**。
 > 写插件：**概念词典 → 架构设计 §3 → 修改指南 §1**。
 > 改内核：**架构设计 → 详细设计 → 修改指南 §2-5**。
 
@@ -126,6 +127,7 @@ fxdevkit uninstall               # 停用本仓库（设 fxdevkit.enabled=false�
 | **[`docs/详细设计.md`](docs/详细设计.md)** | 实现视角：包结构、模块 API、数据流、调用链 | 30 分钟 |
 | **[`docs/命令手册.md`](docs/命令手册.md)** | 每天用的命令速查、环境变量、目录结构、FAQ | 5 分钟查询 |
 | **[`docs/修改指南.md`](docs/修改指南.md)** | 加插件 / 改 dispatch / 改 SDK / 排查问题 / 加新命令的具体步骤 | 按场景查 |
+| **[`docs/插件列表.md`](docs/插件列表.md)** | 所有插件一览；每个插件的详细文档在其包目录下（`packages/<插件>/README.md`） | 5 分钟 |
 | **[`docs/技术方案.md`](docs/技术方案.md)** | 设计原理、未决项、里程碑、与现状的对照 | 15 分钟 |
 
 ---
@@ -138,7 +140,7 @@ D:/products/devkit/
 │   ├── cli/                # @fxdevkit/cli  — 命令行入口（bin: fxdevkit）
 │   ├── core/               # @fxdevkit/core — 内核（调度器 + 通用模块）
 │   ├── sdk/                # @fxdevkit/sdk  — 插件契约（definePlugin + 类型）
-│   └── plugin-commit-rules/  # 第一个插件：commit message 规则化改写（见 docs/插件-commit-rules.md）
+│   └── plugin-commit-rules/  # 第一个插件：commit message 规则化改写（文档见包内 README.md）
 ├── docs/                   # 全部文档（看上文「文档地图」）
 ├── scripts/                # 工具脚本（Cursor git hooks 兼容 wrapper）
 └── package.json            # npm workspaces 根
