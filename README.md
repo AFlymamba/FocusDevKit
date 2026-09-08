@@ -138,7 +138,7 @@ D:/products/devkit/
 │   ├── cli/                # @fxdevkit/cli  — 命令行入口（bin: fxdevkit）
 │   ├── core/               # @fxdevkit/core — 内核（调度器 + 通用模块）
 │   ├── sdk/                # @fxdevkit/sdk  — 插件契约（definePlugin + 类型）
-│   └── plugin-commit-rules/  # 第一个插件：commit message 加 AI 前缀
+│   └── plugin-commit-rules/  # 第一个插件：commit message 规则化改写（见 docs/插件-commit-rules.md）
 ├── docs/                   # 全部文档（看上文「文档地图」）
 ├── scripts/                # 工具脚本（Cursor git hooks 兼容 wrapper）
 └── package.json            # npm workspaces 根
