@@ -38,7 +38,7 @@ interface SelfPackage {
   version: string
 }
 
-/** fxdevkit 自身的包名与版本，用于 self 系列命令 */
+/** fxdevkit 自身的包名与版本，用于 -v / update */
 function readSelfPackage(): SelfPackage {
   const fallback: SelfPackage = { name: '@fxdevkit/cli', version: '0.0.0' }
   try {
@@ -530,10 +530,7 @@ function renderHelp(): string {
     '  fxdevkit install                  在当前仓库启用增强（未装全局 hooks 时会自动装）',
     '  fxdevkit uninstall                在当前仓库停用增强',
     '  fxdevkit uninstall --global       卸载全局 hooks，所有仓库均不再增强',
-    '  fxdevkit self version             查看 fxdevkit 版本',
-    '  fxdevkit self update              更新 fxdevkit 到最新版',
-    '  fxdevkit self rollback <version>  回退 fxdevkit 到指定版本',
-    '  fxdevkit self uninstall           卸载 fxdevkit',
+    '  fxdevkit update [version]          更新 fxdevkit（不带版本=最新，带版本=回退）',
     '  fxdevkit config show              打印合并后的生效配置',
     '  fxdevkit config validate          校验各插件配置',
     '  fxdevkit report                   统计本地事件',
@@ -609,63 +606,40 @@ async function cmdStatus(): Promise<number> {
   return 0
 }
 
-function selfInstall(spec: string, action: string): number {
+function installCli(spec: string): number {
   try {
     runNpm(['install', '-g', spec], path.dirname(paths.home))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    process.stderr.write(`[fxdevkit] ${action}失败：${message}\n`)
+    process.stderr.write(`[fxdevkit] 安装失败：${message}\n`)
     process.stderr.write(`[fxdevkit] 可手动执行：npm install -g ${spec}\n`)
     return 1
   }
   // 自身路径可能已变，重建全局 hooks，避免 dispatcher 指向失效入口
   installGlobalHooks(nodePath, cliEntry)
-  process.stdout.write(`[fxdevkit] ${action}完成：${spec}\n`)
+  process.stdout.write(`[fxdevkit] 已安装 ${spec}\n`)
   return 0
 }
 
-function cmdSelf(rest: string[]): number {
-  const [action, ...args] = rest
-  switch (action) {
-    case undefined:
-    case 'version':
-      process.stdout.write(`${SELF.name} ${SELF.version}\n`)
-      return 0
-
-    case 'update':
-      process.stdout.write(`[fxdevkit] 当前 ${SELF.version}，正在更新...\n`)
-      return selfInstall(`${SELF.name}@latest`, '更新')
-
-    case 'rollback': {
-      const version = args[0]
-      if (!version) {
-        process.stderr.write('[fxdevkit] 用法：fxdevkit self rollback <version>\n')
-        return 1
-      }
-      return selfInstall(`${SELF.name}@${version}`, `回退到 ${version}`)
-    }
-
-    case 'uninstall': {
-      // fxdevkit 自身要移除，全局 hooks 必须一起清掉，否则所有仓库的提交都会失败
-      uninstallGlobalHooks()
-      process.stdout.write('[fxdevkit] 已卸载全局 hooks\n')
-      try {
-        runNpm(['uninstall', '-g', SELF.name], path.dirname(paths.home))
-        process.stdout.write(`[fxdevkit] 已卸载 ${SELF.name}\n`)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        process.stderr.write(`[fxdevkit] 卸载失败：${message}\n`)
-        process.stderr.write(`[fxdevkit] 可手动执行：npm uninstall -g ${SELF.name}\n`)
-        return 1
-      }
-      return 0
-    }
-
-    default:
-      process.stderr.write(`[fxdevkit] 未知的 self 动作：${action}\n`)
-      process.stderr.write('[fxdevkit] 可用动作：version | update | rollback <version> | uninstall\n')
-      return 1
+/**
+ * 更新 / 回退 fxdevkit 自身。
+ *
+ * 卸载自身不提供命令：卸载就是 `npm uninstall -g fxdevkit`。残留的全局 hooks
+ * 会在入口失效时静默放行（见 hooks.ts 的 dispatcherScript），无需讲究顺序。
+ */
+function cmdUpdate(rest: string[]): number {
+  if (rest.length > 1) {
+    process.stderr.write('[fxdevkit] 用法：fxdevkit update [version]\n')
+    return 1
   }
+  const version = rest[0]
+  const spec = version ? `${SELF.name}@${version}` : `${SELF.name}@latest`
+  process.stdout.write(
+    version
+      ? `[fxdevkit] 当前 ${SELF.version}，正在回退到 ${version}...\n`
+      : `[fxdevkit] 当前 ${SELF.version}，正在更新...\n`,
+  )
+  return installCli(spec)
 }
 
 function findPluginCommand(name: string | undefined): DiscoveredWithReason | null {
@@ -735,8 +709,8 @@ async function main(): Promise<number> {
     case 'uninstall':
       return cmdUninstall(rest)
 
-    case 'self':
-      return cmdSelf(rest)
+    case 'update':
+      return cmdUpdate(rest)
 
     case 'plugin':
       return cmdPlugin(rest)

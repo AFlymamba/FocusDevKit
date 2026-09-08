@@ -4,6 +4,8 @@
 > 对应源码：`src/index.ts`
 > 最后更新：2026-09-08
 
+> **本文档定位**：面向 fxDevKit 的**使用者与贡献者**，讲解插件的工作原理、默认规则与自定义方法。它**不是**本包发布到 npm 时的对外说明（对外 API 文档届时另写）。
+
 ---
 
 ## 一、它解决什么问题
@@ -330,12 +332,12 @@ A：把配置写进**那个仓库的** `<仓库>/.fxdevkit.yaml`（仓库配置�
 | 你想找 | 位置 |
 |---|---|
 | 插件全部逻辑 | `src/index.ts` |
-| 默认规则 | 同文件 `DEFAULT_CONFIG`（约 22-30 行） |
-| 规则校验 + 幂等守卫 | 同文件 `normalizeRules` / `assertIdempotent`（约 40-95 行） |
-| commit-msg 处理流程 | 同文件 `hooks['commit-msg']`（约 142-220 行） |
-| check 命令 | 同文件 `commands.check`（约 223-267 行） |
+| 默认规则 | 同文件 `DEFAULT_CONFIG` |
+| 规则校验 + 幂等守卫 | 同文件 `normalizeRules` / `assertIdempotent` |
+| commit-msg 处理流程 | 同文件 `hooks['commit-msg']` |
+| check 命令 | 同文件 `commands.check` |
 | 插件声明（manifest） | `package.json` 的 `fxdevkit` 字段 |
-| 配置如何注入插件 | `packages/core/src/kernel.ts`（约 127-134 行） |
+| 配置如何注入插件 | `packages/core/src/kernel.ts` |
 | 配置如何合并（整体替换语义） | `packages/core/src/config.ts` 的 `deepMerge` / `loadConfig` |
 
 ---

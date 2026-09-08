@@ -34,6 +34,9 @@ function dispatcherScript(hookName: string, nodePath: string, cliEntry: string):
   return [
     '#!/bin/sh',
     `# managed by fxDevKit · ${hookName}`,
+    // 入口（Node 或 CLI 脚本）已不存在 = fxdevkit 被卸载但 hooks 残留，静默放行，
+    // 绝不因「工具已卸载」阻断用户的 git 操作。
+    `[ -e "${nodePath}" ] && [ -e "${cliEntry}" ] || exit 0`,
     `"${nodePath}" "${cliEntry}" hook ${hookName} "$@"`,
     'code=$?',
     '[ "$code" -eq 1 ] && exit 1',

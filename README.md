@@ -192,7 +192,7 @@ fxdevkit logs --last 20
 # 装 / 卸
 fxdevkit install --global         # 装全局 hooks（一次）
 fxdevkit uninstall                # 停用本仓库
-fxdevkit self uninstall           # 卸载 fxdevkit 自身
+fxdevkit update                   # 更新自身（卸载：npm uninstall -g @fxdevkit/cli）
 
 # 插件管理
 fxdevkit plugin list
