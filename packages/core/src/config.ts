@@ -1,7 +1,6 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { paths, REPO_CONFIG_FILE, readTextIfExists } from './paths.js'
+import { paths, readTextIfExists } from './paths.js'
 
 export interface PluginSettings {
   enabled?: boolean
@@ -76,17 +75,20 @@ function readYamlFile(file: string): unknown {
   }
 }
 
-export function loadConfig(repoRoot: string | null): LoadedConfig {
+/**
+ * 配置只有「源码默认 + 用户覆盖」两层（XDG-style）：
+ *   1. 插件代码内置 DEFAULT_CONFIG（npm 安装路径内，不可改、升级会被覆盖）
+ *   2. 用户配置 ~/.fxdevkit/config.yaml（跟人走，跨升级保留）
+ *   3. 环境变量覆盖（仅用于临时调试）
+ *
+ * 工程目录零侵入：<repo>/.fxdevkit.yaml 这一层不存在。
+ * 别问"那某工程跟其他不一样怎么办"，等真出现再说（YAGNI）。
+ */
+export function loadConfig(): LoadedConfig {
   const layers: ConfigLayer[] = []
   let config = DEFAULT_CONFIG
 
-  // 第 1 层：工程默认（<repo>/.fxdevkit.yaml），跟工程走、进 git
-  const repoFile = repoRoot == null ? null : path.join(repoRoot, REPO_CONFIG_FILE)
-  const repoRaw = repoFile == null ? undefined : readYamlFile(repoFile)
-  layers.push({ name: 'project', path: repoFile ?? undefined, applied: repoRaw !== undefined })
-  if (repoRaw !== undefined) config = deepMerge(config, repoRaw)
-
-  // 第 2 层：用户自定义（~/.fxdevkit/config.yaml），覆盖工程默认
+  // 第 1 层：用户配置（~/.fxdevkit/config.yaml）
   const userFile = paths.userConfig
   const userRaw = readYamlFile(userFile)
   layers.push({ name: 'user', path: userFile, applied: userRaw !== undefined })

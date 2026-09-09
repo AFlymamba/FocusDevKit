@@ -18,8 +18,6 @@ export const paths = {
   devices: path.join(FXDEVKIT_HOME, 'device.json'),
 }
 
-export const REPO_CONFIG_FILE = '.fxdevkit.yaml'
-
 export function ensureDir(target: string): void {
   fs.mkdirSync(target, { recursive: true })
 }

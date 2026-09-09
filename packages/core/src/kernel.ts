@@ -85,7 +85,7 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
       return 0
     }
 
-    const { config } = loadConfig(repoRoot)
+    const { config } = loadConfig()
 
     // amend 只能在 prepare-commit-msg 判定，这里落状态供 commit-msg 消费
     if (hookName === 'prepare-commit-msg') {
@@ -231,7 +231,7 @@ export async function runPluginCommand(
   const logger = createCoreLogger(true)
   const cwd = process.cwd()
   const repoRoot = findRepoRoot(cwd)
-  const { config } = loadConfig(repoRoot)
+  const { config } = loadConfig()
 
   const discovered = discoverPlugins(repoRoot).find((p) => p.id === pluginId)
   if (!discovered) {

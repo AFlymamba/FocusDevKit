@@ -176,7 +176,7 @@ D:/products/devkit/
 | **lefthook** | 项目级 hook 管理（YAML 配置 + 各种执行器） |
 | **fxDevKit** | 跨项目的 hook 入口（全局 `~/.fxdevkit/hooks/`）+ 插件派发 |
 
-**关键不冲突**：fxDevKit 内部保留了仓库自有 hook（项目级优先）。
+**关键不冲突**：fxDevKit 内部保留了仓库自有 hook（仓库自有 hook 优先于 fxdevkit 增强）。
 原本装了 husky / lefthook 的仓库，**照常执行，不被取代**。
 
 ---

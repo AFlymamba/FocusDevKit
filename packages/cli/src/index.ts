@@ -165,8 +165,7 @@ function ensurePluginHome(): void {
 }
 
 function setPluginEnabled(pluginId: string, enabled: boolean): void {
-  const repoRoot = findRepoRoot(process.cwd())
-  const { config } = loadConfig(repoRoot)
+  const { config } = loadConfig()
   const plugins = {
     ...config.plugins,
     [pluginId]: { ...(config.plugins[pluginId] ?? {}), enabled },
@@ -232,7 +231,7 @@ function cmdPlugin(rest: string[]): number {
 async function cmdConfig(rest: string[]): Promise<number> {
   const [action] = rest
   const repoRoot = findRepoRoot(process.cwd())
-  const { config, layers } = loadConfig(repoRoot)
+  const { config, layers } = loadConfig()
 
   if (action === 'validate') {
     let failed = false
@@ -477,7 +476,7 @@ async function cmdDoctor(): Promise<number> {
     healthy = doctorLine('入口有效', dispatcher.detail, dispatcher.ok, dispatcher.hint) && healthy
 
     // ③ 插件：再按作用目录过滤
-    const { config } = loadConfig(repoRoot)
+    const { config } = loadConfig()
     const plugins = discoverPlugins(repoRoot)
     if (plugins.length === 0) {
       process.stdout.write('[fxdevkit] 未发现任何插件\n')
@@ -589,7 +588,7 @@ async function cmdStatus(): Promise<number> {
     return 0
   }
 
-  const { config } = loadConfig(repoRoot)
+  const { config } = loadConfig()
   process.stdout.write('[fxdevkit] 插件:\n')
   for (const plugin of plugins) {
     const scope = pluginScope(config, plugin.id, repoRoot)
