@@ -175,8 +175,8 @@ function setPluginEnabled(pluginId: string, enabled: boolean): void {
     ...config,
     plugins,
   }
-  fs.mkdirSync(path.dirname(paths.globalConfig), { recursive: true })
-  fs.writeFileSync(paths.globalConfig, `${YAML.stringify(next)}\n`, 'utf8')
+  fs.mkdirSync(path.dirname(paths.userConfig), { recursive: true })
+  fs.writeFileSync(paths.userConfig, `${YAML.stringify(next)}\n`, 'utf8')
 }
 
 function cmdPlugin(rest: string[]): number {

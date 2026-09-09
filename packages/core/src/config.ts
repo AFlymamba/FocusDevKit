@@ -80,15 +80,17 @@ export function loadConfig(repoRoot: string | null): LoadedConfig {
   const layers: ConfigLayer[] = []
   let config = DEFAULT_CONFIG
 
-  const globalFile = paths.globalConfig
-  const globalRaw = readYamlFile(globalFile)
-  layers.push({ name: 'global', path: globalFile, applied: globalRaw !== undefined })
-  if (globalRaw !== undefined) config = deepMerge(config, globalRaw)
-
+  // 第 1 层：工程默认（<repo>/.fxdevkit.yaml），跟工程走、进 git
   const repoFile = repoRoot == null ? null : path.join(repoRoot, REPO_CONFIG_FILE)
   const repoRaw = repoFile == null ? undefined : readYamlFile(repoFile)
-  layers.push({ name: 'repo', path: repoFile ?? undefined, applied: repoRaw !== undefined })
+  layers.push({ name: 'project', path: repoFile ?? undefined, applied: repoRaw !== undefined })
   if (repoRaw !== undefined) config = deepMerge(config, repoRaw)
+
+  // 第 2 层：用户自定义（~/.fxdevkit/config.yaml），覆盖工程默认
+  const userFile = paths.userConfig
+  const userRaw = readYamlFile(userFile)
+  layers.push({ name: 'user', path: userFile, applied: userRaw !== undefined })
+  if (userRaw !== undefined) config = deepMerge(config, userRaw)
 
   // 环境变量覆盖：只覆盖标量，避免 ENV 表达复杂结构
   const envUrl = process.env.FXDEVKIT_SERVER_URL
@@ -118,9 +120,9 @@ export function isPluginEnabled(config: FxDevkitConfig, pluginId: string): boole
   return config.plugins[pluginId]?.enabled !== false
 }
 
-export function writeGlobalConfig(patch: Record<string, unknown>): void {
-  const existing = (readYamlFile(paths.globalConfig) as Record<string, unknown>) ?? {}
+export function writeUserConfig(patch: Record<string, unknown>): void {
+  const existing = (readYamlFile(paths.userConfig) as Record<string, unknown>) ?? {}
   const merged = deepMerge(existing, patch)
   fs.mkdirSync(paths.home, { recursive: true })
-  fs.writeFileSync(paths.globalConfig, JSON.stringify(merged, null, 2), 'utf8')
+  fs.writeFileSync(paths.userConfig, JSON.stringify(merged, null, 2), 'utf8')
 }

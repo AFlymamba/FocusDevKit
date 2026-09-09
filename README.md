@@ -150,7 +150,7 @@ D:/products/devkit/
 
 ## 当前能力（0.1.0）
 
-- ✅ CLI 命令：`status` / `doctor` / `install [--global]` / `uninstall [--global]` / `self` / `plugin` / `config` / `report` / `logs` / `hook`
+- ✅ CLI 命令：`status` / `doctor` / `install [--global]` / `uninstall [--global]` / `update [version]` / `plugin` / `config` / `report` / `logs`
 - ✅ 通用 hooks：`commit-msg` / `prepare-commit-msg` / `post-checkout` / `post-merge` / `pre-commit` / `pre-push`
 - ✅ 第一个插件 `commit-rules`：自动给 commit message 加 `AI ` 前缀、规则化校验
 - ✅ 全局 hooks（`core.hooksPath`）+ 仓库显式停用（`fxdevkit.enabled=false`）

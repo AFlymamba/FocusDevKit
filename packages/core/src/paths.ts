@@ -14,7 +14,7 @@ export const paths = {
   cache: path.join(FXDEVKIT_HOME, 'cache'),
   plugins: path.join(FXDEVKIT_HOME, 'plugins'),
   mockServer: path.join(FXDEVKIT_HOME, 'mock-server'),
-  globalConfig: path.join(FXDEVKIT_HOME, 'config.yaml'),
+  userConfig: path.join(FXDEVKIT_HOME, 'config.yaml'),
   devices: path.join(FXDEVKIT_HOME, 'device.json'),
 }
 
