@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import YAML from 'yaml'
 import {
   disableRepo,
+  checkHooksHealth,
   dispatchHook,
   discoverPlugins,
   enableRepo,
@@ -31,7 +32,34 @@ import type { DiscoveredWithReason, LogLevel } from '@fxdevkit/core'
 import type { HookName } from '@fxdevkit/sdk'
 
 const cliEntry = fileURLToPath(import.meta.url)
-const nodePath = process.execPath
+
+/** 会随应用升级被替换掉的 node 目录：IDE 托管、临时目录 */
+const VOLATILE_NODE = /[\\/](\.workbuddy|binaries|Temp|temp|scoop[\\/]apps)[\\/]/i
+
+/**
+ * 写进 hook 脚本的 node 路径。
+ *
+ * 直接记 process.execPath 有个坑：在 IDE 终端里执行 install 时，
+ * 记下的就是 IDE 托管的 node（如 ...\.workbuddy\binaries\node\versions\22.22.2-2\node.exe）。
+ * 这类路径会随应用升级整个被替换，hook 随即静默失效——这次故障就是这么来的。
+ * 所以安装时优先挑一个稳定路径，实在挑不到才退回 execPath
+ * （脚本本身还有 PATH 兜底，见 core/hooks.ts 的 dispatcherScript）。
+ */
+function pickRecordedNode(): string {
+  if (!VOLATILE_NODE.test(process.execPath)) return process.execPath
+  try {
+    const cmd = process.platform === 'win32' ? 'where' : 'which'
+    const out = execFileSync(cmd, ['node'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    const candidates = out.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    const stable = candidates.find((p) => !VOLATILE_NODE.test(p)) ?? candidates[0]
+    if (stable && fs.existsSync(stable)) return stable
+  } catch {
+    /* 解析不到就用原值 */
+  }
+  return process.execPath
+}
+
+const nodePath = pickRecordedNode()
 
 interface SelfPackage {
   name: string
@@ -406,23 +434,8 @@ function doctorLine(label: string, value: string, ok: boolean, hint?: string): b
 }
 
 function checkDispatcher(): { ok: boolean; detail: string; hint?: string } {
-  const script = path.join(paths.hooks, 'commit-msg')
-  if (!fs.existsSync(script)) {
-    return { ok: false, detail: '未生成', hint: '执行 fxdevkit install' }
-  }
-  const text = fs.readFileSync(script, 'utf8')
-  const quoted = [...text.matchAll(/"([^"]+)"/g)].map((match) => match[1])
-  if (quoted.length < 2) {
-    return { ok: false, detail: '脚本格式异常', hint: '执行 fxdevkit install 重建' }
-  }
-  const [nodeBin, entry] = quoted
-  if (!fs.existsSync(nodeBin)) {
-    return { ok: false, detail: 'Node 路径失效', hint: `${nodeBin} 不存在，执行 fxdevkit install 重建` }
-  }
-  if (!fs.existsSync(entry)) {
-    return { ok: false, detail: 'CLI 入口失效', hint: `${entry} 不存在，执行 fxdevkit install 重建` }
-  }
-  return { ok: true, detail: entry }
+  const health = checkHooksHealth()
+  return { ok: health.ok, detail: health.detail, ...(health.hint ? { hint: health.hint } : {}) }
 }
 
 async function cmdDoctor(): Promise<number> {

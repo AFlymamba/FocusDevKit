@@ -23,26 +23,148 @@ export const MANAGED_HOOKS: HookName[] = [
 export const REPO_ENABLED_KEY = 'fxdevkit.enabled'
 
 /**
+ * dispatcher 脚本版本。
+ *
+ * 版本戳写进脚本，doctor 据此判断「盘上的 hook 是不是当前版本生成的」——
+ * 老脚本没有自愈能力，只能靠版本号识别出来再提示重建。
+ */
+export const HOOK_SCRIPT_VERSION = 2
+
+/**
  * dispatcher 脚本。
  *
  * 退出码约定：
  *   0 → 放行
  *   1 → 阻断（插件业务性 reject，或仓库自有 hook 失败）
  *   其他 / node 崩溃 → 一律放行，绝不阻断开发
+ *
+ * node 不写死单一路径，运行时按三级解析：
+ *   ① 环境变量 FXDEVKIT_NODE（用户显式指定，最高优先级）
+ *   ② 安装时记录的路径（确定性最好）
+ *   ③ PATH 里的 node（兜底）
+ *
+ * 为什么必须这样：曾经把安装时刻的 node 绝对路径写死在脚本里，
+ * node 一升级（IDE 内置 node 目录从 22.22.2-2 换成 22.22.2-3）路径就失效，
+ * hook 退出码变成 127，脚本判定「非 1 → 放行」，于是整条增强链路静默失效，
+ * 用户以为插件还在工作。三级解析 + 找不到时往 stderr 打一行告警，
+ * 就是为了让这种失效不再无声。
  */
 function dispatcherScript(hookName: string, nodePath: string, cliEntry: string): string {
   return [
     '#!/bin/sh',
-    `# managed by fxDevKit · ${hookName}`,
-    // 入口（Node 或 CLI 脚本）已不存在 = fxdevkit 被卸载但 hooks 残留，静默放行，
+    `# fxdevkit-hook v${HOOK_SCRIPT_VERSION} · ${hookName}`,
+    `# node: ${nodePath}`,
+    `# entry: ${cliEntry}`,
+    'FX_NODE="${FXDEVKIT_NODE:-}"',
+    `[ -n "$FX_NODE" ] || FX_NODE="${nodePath}"`,
+    `[ -e "$FX_NODE" ] || FX_NODE="$(command -v node 2>/dev/null)"`,
+    'if [ ! -e "$FX_NODE" ]; then',
+    '  echo "[fxdevkit] 未找到可用的 node，本次增强已跳过（修复：fxdevkit install --global）" >&2',
+    '  exit 0',
+    'fi',
+    // CLI 入口已不存在 = fxdevkit 被卸载但 hooks 残留，静默放行，
     // 绝不因「工具已卸载」阻断用户的 git 操作。
-    `[ -e "${nodePath}" ] && [ -e "${cliEntry}" ] || exit 0`,
-    `"${nodePath}" "${cliEntry}" hook ${hookName} "$@"`,
+    `[ -e "${cliEntry}" ] || exit 0`,
+    `"$FX_NODE" "${cliEntry}" hook ${hookName} "$@"`,
     'code=$?',
     '[ "$code" -eq 1 ] && exit 1',
     'exit 0',
     '',
   ].join('\n')
+}
+
+/** 从 PATH 里找一个可用的 node，用于兜底与体检 */
+function resolveNodeFromPath(): string | null {
+  try {
+    if (process.platform === 'win32') {
+      const out = execFileSync('where', ['node'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+      return out.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? null
+    }
+    const out = execFileSync('sh', ['-c', 'command -v node'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    return out.trim() || null
+  } catch {
+    return null
+  }
+}
+
+export interface HooksHealth {
+  ok: boolean
+  /** 脚本是旧版生成的，需要重建才算修好 */
+  outdated: boolean
+  detail: string
+  hint?: string
+}
+
+/**
+ * 体检：盘上的 hook 脚本是否还有效。
+ *
+ * 查四件事：脚本在不在、是不是当前版本、CLI 入口在不在、node 还能不能找到。
+ * node 记录路径失效不算致命——运行时会回退到 PATH 里的 node，
+ * 只有当 PATH 里也没有时才判定为故障。
+ */
+export function checkHooksHealth(): HooksHealth {
+  const script = path.join(paths.hooks, 'commit-msg')
+  if (!fs.existsSync(script)) {
+    return { ok: false, outdated: true, detail: '未生成', hint: '执行 fxdevkit install --global' }
+  }
+
+  const text = fs.readFileSync(script, 'utf8')
+  const version = /^# fxdevkit-hook v(\d+)/m.exec(text)?.[1]
+  const recordedNode = /^# node: (.+)$/m.exec(text)?.[1]?.trim()
+  const entry = /^# entry: (.+)$/m.exec(text)?.[1]?.trim()
+
+  if (!version || !entry) {
+    return {
+      ok: false,
+      outdated: true,
+      detail: '旧版脚本（无版本戳）',
+      hint: '无法自检，执行 fxdevkit install --global 重建',
+    }
+  }
+
+  if (!fs.existsSync(entry)) {
+    return {
+      ok: false,
+      outdated: false,
+      detail: 'CLI 入口失效',
+      hint: `${entry} 不存在，执行 fxdevkit install --global 重建`,
+    }
+  }
+
+  if (Number(version) < HOOK_SCRIPT_VERSION) {
+    return {
+      ok: false,
+      outdated: true,
+      detail: `脚本版本 v${version}（当前 v${HOOK_SCRIPT_VERSION}）`,
+      hint: '执行 fxdevkit install --global 重建',
+    }
+  }
+
+  const recordedOk = recordedNode != null && fs.existsSync(recordedNode)
+  if (recordedOk) return { ok: true, outdated: false, detail: entry }
+
+  const fallback = resolveNodeFromPath()
+  if (!fallback) {
+    return {
+      ok: false,
+      outdated: false,
+      detail: 'Node 不可用',
+      hint: '记录路径已失效，且 PATH 中找不到 node；执行 fxdevkit install --global 重建',
+    }
+  }
+
+  return {
+    ok: true,
+    outdated: false,
+    detail: `记录路径已失效，运行时回退 ${fallback}`,
+    hint: '建议执行 fxdevkit install --global 更新记录路径',
+  }
 }
 
 function gitConfig(args: string[], cwd?: string): string | null {
