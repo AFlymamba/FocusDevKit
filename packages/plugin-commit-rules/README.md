@@ -1,4 +1,4 @@
-# commit-rules 插件：工作原理与使用
+# plugin-commit-rules 插件：工作原理与使用
 
 > 第一个插件。挂在 `git commit` 背后，按**可配置规则**自动改写或校验提交信息。
 > 对应源码：`src/index.ts`
@@ -33,7 +33,7 @@
 ```jsonc
 // package.json
 "fxdevkit": {
-  "id": "commit-rules",
+  "id": "plugin-commit-rules",
   "name": "commit",
   "hooks": ["commit-msg"],        // ← 监听这个 hook
   "commands": ["check"],          // ← 提供 fxdevkit commit check 命令
@@ -147,7 +147,7 @@ git commit -m "fix: 修复登录超时"     # 入库后变成 "AI fix: 修复登
 验证它确实生效：
 
 ```bash
-fxdevkit logs --plugin commit-rules --last 10   # 看插件的执行日志
+fxdevkit logs --plugin plugin-commit-rules --last 10   # 看插件的执行日志
 fxdevkit report                                  # 看 commit.rewritten 事件
 ```
 
@@ -165,7 +165,7 @@ fxdevkit report                                  # 看 commit.rewritten 事件
 
 ```yaml
 plugins:
-  commit-rules:
+  plugin-commit-rules:
     rules:              # ← 规则数组
       - name: ai-explicit
         pattern: '^(AI|ai)[:\s]'
@@ -191,7 +191,7 @@ plugins:
 
 ```yaml
 plugins:
-  commit-rules:
+  plugin-commit-rules:
     rules:
       - name: ai-explicit
         pattern: '^(🤖|AI|ai)'        # 必须把新前缀也纳入幂等匹配
@@ -210,7 +210,7 @@ plugins:
 
 ```yaml
 plugins:
-  commit-rules:
+  plugin-commit-rules:
     rules:
       - name: ai-explicit
         pattern: '^(AI|ai)[:\s]'
@@ -227,7 +227,7 @@ plugins:
 
 ```yaml
 plugins:
-  commit-rules:
+  plugin-commit-rules:
     rules:
       - name: ai-explicit
         pattern: '(AI)$'               # 末尾带 AI 的跳过
@@ -244,7 +244,7 @@ plugins:
 
 ```yaml
 plugins:
-  commit-rules:
+  plugin-commit-rules:
     rules:
       - name: ai-explicit
         pattern: '^\[AI\]'
@@ -258,7 +258,7 @@ plugins:
 
 ```yaml
 plugins:
-  commit-rules:
+  plugin-commit-rules:
     dryRun: true
 ```
 
@@ -268,7 +268,7 @@ plugins:
 
 ```yaml
 plugins:
-  commit-rules:
+  plugin-commit-rules:
     branches:
       - 'main'
       - 'release/*'       # 支持通配符
@@ -302,7 +302,7 @@ plugins:
 |---|---|
 | 规则是否生效 | `git commit -m "test: xxx"` 后看 message 是否被改写 |
 | 只看不改 | 配置 `dryRun: true`，看日志 `[dry-run]` |
-| 插件执行日志 | `fxdevkit logs --plugin commit-rules --last 20` |
+| 插件执行日志 | `fxdevkit logs --plugin plugin-commit-rules --last 20` |
 | 事件流水 | `fxdevkit report`（看 `commit.rewritten` / `commit.passed` / `commit.guarded`） |
 | 校验格式（CI 用） | `fxdevkit commit check --sha HEAD`（不改任何东西，违规返回 1） |
 | 配置是否被读到 | `fxdevkit doctor` + `fxdevkit logs --core` |
@@ -323,8 +323,8 @@ A：不会。流程守卫（§2.2 步骤①）直接放行，与规则无关。
 **Q4：配置改了要重启吗？**
 A：不用。配置是每次 hook 触发时重新读的，下次提交即生效。
 
-**Q5：我只想调整 commit-rules 的规则（不影响所有仓库的默认行为）？**
-A：在 `~/.fxdevkit/config.yaml` 里把 `plugins.commit-rules.rules` 整体替换为你想要的规则（数组字段是整体替换语义，不是追加）。**注意**：fxdevkit 不会在仓库根目录写 `.fxdevkit.yaml`，所有配置都集中在用户目录。
+**Q5：我只想调整 plugin-commit-rules 的规则（不影响所有仓库的默认行为）？**
+A：在 `~/.fxdevkit/config.yaml` 里把 `plugins.plugin-commit-rules.rules` 整体替换为你想要的规则（数组字段是整体替换语义，不是追加）。**注意**：fxdevkit 不会在仓库根目录写 `.fxdevkit.yaml`，所有配置都集中在用户目录。
 
 ---
 

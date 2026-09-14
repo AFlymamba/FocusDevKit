@@ -28,7 +28,7 @@
 
 - 自动给 commit message 加团队约定前缀（`AI `、项目编号、所属领域……）
 - 自动跳过 merge / rebase / cherry-pick 的提交
-- `fxdevkit commit-rules check` 校验历史提交格式（给 CI 用）
+- `fxdevkit plugin-commit-rules check` 校验历史提交格式（给 CI 用）
 - 自动记录「这次提交触发了什么 / 结果如何」，落到本地事件流
 
 ---
@@ -72,7 +72,7 @@ git commit -m "test: hello"     # commit message 应被自动加 "AI " 前缀
 ```bash
 fxdevkit status                  # 当前仓库状态：hooks、插件、是否启用
 fxdevkit logs --last 20          # 最近 20 条调度日志
-fxdevkit logs --plugin commit-rules   # 某个插件的日志
+fxdevkit logs --plugin plugin-commit-rules   # 某个插件的日志
 fxdevkit doctor                  # 完整健康检查
 ```
 
@@ -162,7 +162,7 @@ D:/products/devkit/
 
 - ✅ CLI 命令：`status` / `doctor` / `install` / `uninstall` / `disable` / `enable` / `update [version]` / `plugin` / `config` / `report` / `logs`
 - ✅ 通用 hooks：`commit-msg` / `prepare-commit-msg` / `post-checkout` / `post-merge` / `pre-commit` / `pre-push`
-- ✅ 第一个插件 `commit-rules`：自动给 commit message 加 `AI ` 前缀、规则化校验
+- ✅ 第一个插件 `plugin-commit-rules`：自动给 commit message 加 `AI ` 前缀、规则化校验
 - ✅ 全局 hooks（`core.hooksPath`）+ 目录级排除（用户配置 `exclude`，跟人走）
 - ✅ 作用域（`plugins.<id>.projects`）
 - ✅ 日志追踪（双通道：`core` / `plugin`，按天落盘）
@@ -213,7 +213,7 @@ fxdevkit plugin enable xxx
 fxdevkit plugin disable xxx
 
 # 跑插件命令
-fxdevkit commit check             # 触发 commit-rules 的 check 子命令
+fxdevkit commit check             # 触发 plugin-commit-rules 的 check 子命令
 ```
 
 完整命令见 [`docs/命令手册.md`](docs/命令手册.md)。

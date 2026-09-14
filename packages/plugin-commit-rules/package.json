@@ -19,7 +19,7 @@
     "@fxdevkit/sdk": "*"
   },
   "fxdevkit": {
-    "id": "commit-rules",
+    "id": "plugin-commit-rules",
     "name": "commit",
     "apiVersion": 1,
     "hooks": ["commit-msg"],

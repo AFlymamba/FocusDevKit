@@ -119,7 +119,7 @@ function applyRule(rule: Rule, original: string, firstLine: string): string {
 }
 
 export default definePlugin<CommitRulesConfig>({
-  id: 'commit-rules',
+  id: 'plugin-commit-rules',
   priority: 100,
   defaultConfig: DEFAULT_CONFIG,
 

@@ -71,6 +71,25 @@ function candidateDirs(repoRoot: string | null): string[] {
   return dirs.filter(dirExists)
 }
 
+/**
+ * 插件 id 规则：必须形如 `plugin-xxx`（小写字母 / 数字，连字符分隔）。
+ *
+ * id 是内核识别插件的唯一标识，同时也是配置里的键（`plugins.<id>`）。
+ * 不合规的清单不参与去重，直接标记跳过，原因会在 `plugin list` / `doctor` 里显示。
+ */
+export const PLUGIN_ID_PATTERN = /^plugin-[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+/** 清单不合规时的跳过原因；合规返回 undefined */
+function skippedReason(manifest: PluginManifest): string | undefined {
+  if (!PLUGIN_ID_PATTERN.test(manifest.id)) {
+    return `id 必须形如 plugin-xxx（当前：${manifest.id}）`
+  }
+  if (manifest.apiVersion !== PLUGIN_API_VERSION) {
+    return `apiVersion ${manifest.apiVersion} 与内核 ${PLUGIN_API_VERSION} 不兼容`
+  }
+  return undefined
+}
+
 function collect(pkgDir: string, out: Map<string, DiscoveredWithReason>): void {
   try {
     const pkgPath = path.join(pkgDir, 'package.json')
@@ -96,10 +115,7 @@ function collect(pkgDir: string, out: Map<string, DiscoveredWithReason>): void {
       dir: pkgDir,
       entry,
       manifest,
-      skipped:
-        manifest.apiVersion !== PLUGIN_API_VERSION
-          ? `apiVersion ${manifest.apiVersion} 与内核 ${PLUGIN_API_VERSION} 不兼容`
-          : undefined,
+      skipped: skippedReason(manifest),
     }
 
     const existing = out.get(manifest.id)

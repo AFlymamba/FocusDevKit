@@ -26,7 +26,13 @@ export type Permission =
   | 'proc:exec'
 
 export interface PluginManifest {
-  /** 内部唯一标识，用于配置键与事件记录 */
+  /**
+   * 内部唯一标识，用于配置键（`plugins.<id>`）、事件记录与日志过滤。
+   *
+   * **规则：必须形如 `plugin-xxx`**（小写字母 / 数字，连字符分隔），
+   * 且必须与代码内 `definePlugin({ id })` 完全一致——不一致的内核拒绝装载。
+   * 不合规的清单会被跳过，原因显示在 `fxdevkit plugin list` / `doctor`。
+   */
   id: string
   /**
    * 命令行短名，全局唯一，用于 `fxdevkit <name> ...`。

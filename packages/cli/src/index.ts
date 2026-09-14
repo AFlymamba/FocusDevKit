@@ -379,7 +379,7 @@ function cmdLogs(rest: string[]): number {
       channel = 'plugin'
       pluginId = rest[++i]
       if (!pluginId) {
-        process.stderr.write('[fxdevkit] --plugin 需要一个插件 id，如 --plugin commit-rules\n')
+        process.stderr.write('[fxdevkit] --plugin 需要一个插件 id，如 --plugin plugin-commit-rules\n')
         return 1
       }
     } else if (arg === '--level') {
