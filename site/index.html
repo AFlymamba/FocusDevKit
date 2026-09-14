@@ -3,284 +3,144 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>fxDevKit — 人的能力增强器</title>
-<style>
-  :root{
-    --ink:#1b1b21;--ink-2:#5b5b66;--ink-3:#8b8b98;
-    --line:#eceaf4;--surface:#faf9ff;--code:#f8f8fd;
-    --brand:#4f46e5;--brand-ink:#3730a3;--brand-soft:#eef2ff;
-    --teal-ink:#115e59;--teal-soft:#f0fdfa;
-    --violet-ink:#5b21b6;--violet-soft:#f5f3ff;
-    --amber-ink:#92400e;--amber-soft:#fffbeb;
-  }
-  *{box-sizing:border-box}
-  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-  body{
-    margin:0;background:#fff;color:var(--ink);
-    font-family:"Microsoft YaHei","Microsoft YaHei UI","Segoe UI",-apple-system,sans-serif;
-    font-size:15px;line-height:1.85;-webkit-font-smoothing:antialiased;
-  }
-  a{color:var(--brand);text-decoration:none}
-  a:hover{text-decoration:underline}
-  .wrap{max-width:920px;margin:0 auto;padding:0 24px}
-
-  header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-  .nav{display:flex;align-items:center;justify-content:space-between;height:58px}
-  .brand{font-weight:400;letter-spacing:.01em;font-size:15px;color:var(--ink);display:flex;align-items:center;gap:9px}
-  .mark{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,#6366f1,#8b5cf6)}
-  .brand span{font-size:12px;background:var(--brand-soft);color:var(--brand-ink);border-radius:999px;padding:1px 8px}
-  .nav nav{display:flex;gap:22px;font-size:14px}
-  .nav nav a{color:var(--ink-2)}
-  .nav nav a:hover{color:var(--brand);text-decoration:none}
-
-  section{padding:64px 0;border-bottom:1px solid var(--line)}
-  section:last-of-type{border-bottom:none}
-  section.tint{background:var(--surface)}
-  .eyebrow{font-size:12px;letter-spacing:.14em;color:var(--brand);text-transform:uppercase;margin:0 0 14px;font-weight:400}
-  h1{font-size:38px;line-height:1.4;font-weight:400;margin:0 0 18px}
-  h1 em{font-style:normal;color:var(--brand)}
-  h2{font-size:22px;font-weight:400;margin:0 0 8px}
-  .lede{font-size:17px;color:var(--ink-2);margin:0 0 28px;max-width:44em}
-  p{margin:0 0 16px}
-  .sub{color:var(--ink-2);margin:0 0 28px;max-width:46em}
-
-  .hero{padding:92px 0 76px;
-    background:radial-gradient(900px 340px at 12% -10%,#eef2ff 0%,rgba(238,242,255,0) 70%),
-               radial-gradient(700px 320px at 88% 0%,#f5f3ff 0%,rgba(245,243,255,0) 70%);
-    border-bottom:1px solid var(--line)}
-  .hero .lede{font-size:18px}
-  .chain{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 30px;font-size:15px}
-  .chain b{font-weight:400;border-radius:999px;padding:5px 15px;border:1px solid transparent}
-  .chain b:nth-of-type(1){background:var(--brand-soft);color:var(--brand-ink);border-color:#dfe3ff}
-  .chain b:nth-of-type(2){background:var(--violet-soft);color:var(--violet-ink);border-color:#e9e4ff}
-  .chain b:nth-of-type(3){background:var(--teal-soft);color:var(--teal-ink);border-color:#ccfbf1}
-  .chain b:nth-of-type(4){background:var(--amber-soft);color:var(--amber-ink);border-color:#fde68a}
-  .chain i{color:var(--ink-3);font-style:normal}
-
-  .btns{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 26px}
-  .btn{display:inline-block;border-radius:9px;padding:9px 18px;font-size:14px;background:var(--brand);color:#fff;border:1px solid var(--brand)}
-  .btn:hover{background:#4338ca;text-decoration:none}
-  .btn.ghost{background:#fff;color:var(--ink);border-color:#dcd9ea}
-  .btn.ghost:hover{border-color:var(--brand);color:var(--brand);text-decoration:none}
-
-  pre{background:var(--code);border:1px solid #e9e6f6;border-radius:10px;padding:14px 16px;overflow-x:auto;font-size:13px;line-height:1.8;margin:0 0 12px}
-  code{font-family:Consolas,"Microsoft YaHei",monospace}
-  pre code .c{color:#9a98ad}
-  pre code .p{color:var(--brand)}
-  p code,li code,td code,.card code{background:var(--brand-soft);color:var(--brand-ink);padding:1px 5px;border-radius:4px;font-size:13px}
-
-  .grid{display:grid;gap:18px}
-  .g3{grid-template-columns:repeat(3,1fr)}
-  .g2{grid-template-columns:repeat(2,1fr)}
-  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px 24px;border-top:3px solid var(--brand)}
-  .card h3{font-size:15px;font-weight:400;margin:0 0 8px}
-  .card h3 b{font-weight:400;color:var(--brand-ink)}
-  .card p{margin:0;color:var(--ink-2);font-size:14px}
-  .card.indigo{background:var(--brand-soft);border-color:#e0e3ff;border-top-color:var(--brand)}
-  .card.indigo h3{color:var(--brand-ink)}
-  .card.teal{background:var(--teal-soft);border-color:#ccfbf1;border-top-color:#14b8a6}
-  .card.teal h3{color:var(--teal-ink)}
-  .card.violet{background:var(--violet-soft);border-color:#e9e4ff;border-top-color:#8b5cf6}
-  .card.violet h3{color:var(--violet-ink)}
-  .card.amber{background:var(--amber-soft);border-color:#fde68a;border-top-color:#f59e0b}
-  .card.amber h3{color:var(--amber-ink)}
-
-  ul.clean{list-style:none;margin:0;padding:0}
-  ul.clean li{padding:13px 0;border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:baseline;font-size:15px}
-  ul.clean li:last-child{border-bottom:none}
-  ul.clean li::before{content:"";flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--brand);transform:translateY(-2px)}
-  ul.clean li:nth-child(2)::before{background:#14b8a6}
-  ul.clean li:nth-child(3)::before{background:#8b5cf6}
-  ul.clean li:nth-child(4)::before{background:#f59e0b}
-  ul.clean li:nth-child(5)::before{background:#f43f5e}
-  ul.clean li:nth-child(6)::before{background:#0ea5e9}
-  ul.clean li b{font-weight:400;min-width:9em;flex:0 0 auto}
-  ul.clean li span{color:var(--ink-2)}
-
-  .stack{display:flex;flex-direction:column;gap:10px;max-width:560px}
-  .layer{border:1px solid var(--line);border-radius:10px;padding:14px 18px;background:#fff;border-left:3px solid #c7c5d8}
-  .layer .t{font-weight:400;font-size:14px}
-  .layer .d{color:var(--ink-2);font-size:13px}
-  .layer.core{background:var(--brand-soft);border-color:#e0e3ff;border-left-color:var(--brand)}
-  .layer.core .t{color:var(--brand-ink)}
-  .layer.plugin{border-left-color:#14b8a6}
-  .layer.sdk{border-left-color:#8b5cf6}
-
-  .vs{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-  .vs .box{border:1px solid var(--line);border-radius:12px;padding:22px 24px}
-  .vs .box h4{font-size:14px;font-weight:400;margin:0 0 12px;color:var(--ink-3)}
-  .vs .box ul{margin:0;padding-left:18px;color:var(--ink-2);font-size:14px}
-  .vs .box ul li{margin-bottom:6px}
-  .vs .box.good{background:var(--brand-soft);border-color:#e0e3ff}
-  .vs .box.good h4{color:var(--brand-ink)}
-
-  table{width:100%;border-collapse:collapse;font-size:14px}
-  th,td{text-align:left;padding:11px 0;border-bottom:1px solid var(--line);vertical-align:top}
-  td:first-child{white-space:nowrap;padding-right:24px}
-  tr:last-child td{border-bottom:none}
-
-  .note{color:var(--ink-2);font-size:14px;background:var(--brand-soft);border-left:3px solid var(--brand);padding:13px 16px;border-radius:0 8px 8px 0;margin:0}
-  footer{padding:40px 0 56px;color:var(--ink-3);font-size:13px;background:var(--surface)}
-  footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
-
-  @media (max-width:760px){
-    .g3,.g2,.vs{grid-template-columns:1fr}
-    h1{font-size:30px}
-    .hero{padding:64px 0 56px}
-    section{padding:48px 0}
-    .nav nav{display:none}
-    ul.clean li{flex-direction:column;gap:2px}
-  }
-</style>
+<title>fxDevKit</title>
+<link rel="stylesheet" href="./assets/tailwind.css">
 </head>
-<body>
+<body class="bg-white font-sans text-slate-900 antialiased">
 
-<header>
-  <div class="wrap nav">
-    <div class="brand"><i class="mark"></i>fxDevKit<span>0.1.0</span></div>
-    <nav>
-      <a href="#how">怎么用</a>
-      <a href="#why">为什么</a>
-      <a href="#ability">能力</a>
-      <a href="#start">上手</a>
-      <a href="#boundary">边界</a>
+<div class="pointer-events-none absolute inset-x-0 -top-40 h-[520px] bg-gradient-to-b from-indigo-100/80 via-indigo-50/40 to-transparent blur-2xl"></div>
+
+<header class="relative z-10">
+  <div class="mx-auto flex h-20 max-w-6xl items-center justify-between px-6">
+    <span class="text-base font-semibold tracking-tight">fxDevKit</span>
+    <nav class="hidden gap-9 text-sm text-slate-600 sm:flex">
+      <a href="#feat" class="transition-colors hover:text-slate-900">特征</a>
+      <a href="#plugin" class="transition-colors hover:text-slate-900">插件</a>
+      <a href="#start" class="transition-colors hover:text-slate-900">上手</a>
     </nav>
+    <a href="#start" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700">立即上手</a>
   </div>
 </header>
 
-<div class="wrap">
+<section class="relative z-10 mx-auto max-w-6xl px-6 pb-24 pt-14 text-center sm:pt-20">
+  <span class="inline-flex items-center rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-medium tracking-wide text-white">人的能力增强器</span>
+  <h1 class="mx-auto mt-8 max-w-3xl text-4xl font-semibold leading-[1.2] tracking-tight sm:text-5xl">
+    不断增强你的个人助手
+  </h1>
+  <p class="mx-auto mt-7 max-w-xl text-base leading-relaxed text-slate-600">
+    它住在你的电脑里，把重复的事接过去——提交规范、格式检查、日志查找。
+    <span class="font-medium text-slate-900">决定仍然归你</span>，习惯也不必改。
+  </p>
+  <div class="mx-auto mt-10 inline-flex items-center gap-3 rounded-2xl bg-slate-900 px-6 py-4 shadow-lg shadow-slate-900/10">
+    <span class="size-1.5 rounded-full bg-emerald-400"></span>
+    <code class="font-mono text-sm text-slate-100">npm install -g @fxdevkit/cli && fxdevkit install --global</code>
+  </div>
+  <p class="mt-5 text-sm text-slate-500">一次安装，已存在的仓库和以后新建的仓库都会生效。</p>
+</section>
 
-  <section class="hero">
-    <p class="eyebrow">fxDevKit</p>
-    <h1>需要什么能力，<br><em>就装上什么能力</em></h1>
-    <p class="lede">
-      人的能力增强器。内核不实现任何一种能力，只负责调度与兜底——
-      所以你能做什么，取决于你装了什么，而不是别人预设了什么。
-    </p>
-    <div class="chain">
-      <b>人</b><i>→</i><b>目标</b><i>→</i><b>需要能力</b><i>→</i><b>装插件</b>
-    </div>
-    <div class="btns">
-      <a class="btn" href="#start">装上试试</a>
-      <a class="btn ghost" href="#why">先看为什么</a>
-    </div>
-    <pre><code><span class="c"># 一次安装，之后所有仓库默认被增强</span>
-<span class="p">npm install -g</span> @fxdevkit/cli
-<span class="p">fxdevkit install</span> --global</code></pre>
-  </section>
+<section id="feat" class="mx-auto max-w-6xl px-6 py-20">
+  <h2 class="text-center text-3xl font-semibold tracking-tight sm:text-4xl">越用越顺手的三个原因</h2>
+  <div class="mt-14 grid gap-6 sm:grid-cols-3">
 
-  <section id="how">
-    <p class="eyebrow">怎么用</p>
-    <h2>三种入口，一条内核</h2>
-    <p class="sub">你想怎么用它都行，背后是同一条调度链路，装一次，三种都通。</p>
-
-    <div class="grid g3">
-      <div class="card indigo">
-        <h3>自动触发　<b>你不用记得做任何事</b></h3>
-        <p>照常提交代码，规范校验、前缀补全、行为记录在背后一次完成。它只在该出现的时候出现，其余时候你感觉不到它。</p>
-      </div>
-      <div class="card teal">
-        <h3>主动触发　<b>一条命令看清全局</b></h3>
-        <p>状态、健康、日志、事件都在手边。想确认增强有没有生效、命中了什么规则，不用猜，直接查。</p>
-      </div>
-      <div class="card violet">
-        <h3>对话触发　<b>说一句话就够</b></h3>
-        <p>你描述意图，AI 去调用插件的 skill 与 MCP。演进方向，契约位置已经留好。</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="why" class="tint">
-    <p class="eyebrow">为什么</p>
-    <h2>增强这件事，不该每次都重做一遍</h2>
-    <p class="sub">想让工具替你多干一点，通常只能零散地加：一段 hook 脚本、一条 lint 规则、一个 CI 步骤。每加一种，就重新接一次。</p>
-
-    <div class="vs">
-      <div class="box">
-        <h4>零散增强的三个代价</h4>
-        <ul>
-          <li>重复——每种增强都要自己解析上下文、自己读配置</li>
-          <li>不一致——有的失败会阻断，有的静默放行，行为无法预期</li>
-          <li>不可见——做过什么、命中过什么，事后无从追溯</li>
-        </ul>
-      </div>
-      <div class="box good">
-        <h4>统一挂载点给的是什么</h4>
-        <ul>
-          <li>接入一次，之后每增加一种增强就是装一个插件</li>
-          <li>失败策略统一：一律跳过放行，绝不打断你手上的事</li>
-          <li>每一次增强都留下记录，可查、可回溯</li>
-        </ul>
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+      <div class="h-28 bg-gradient-to-br from-indigo-100 via-slate-50 to-white"></div>
+      <div class="p-6">
+        <div class="flex size-10 items-center justify-center rounded-xl bg-indigo-600/10 text-indigo-600">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="size-5">
+            <path d="M3 17l6-6 4 4 7-7"/><path d="M17 8h4v4"/>
+          </svg>
+        </div>
+        <h3 class="mt-5 text-base font-semibold">不断增强</h3>
+        <p class="mt-2.5 text-sm leading-relaxed text-slate-600">
+          需要什么能力，就装什么插件。装一个，多一份力气；不想要了，随时卸下。
+        </p>
       </div>
     </div>
 
-    <h2 style="margin-top:48px">四层结构</h2>
-    <p class="sub">单向依赖。插件只依赖契约，彼此不可见，可以单独安装、单独演进、单独交付。</p>
-    <div class="stack">
-      <div class="layer"><div class="t">CLI　命令层</div><div class="d">你敲的命令。命令集与插件无关，插件增减不改变它。</div></div>
-      <div class="layer core"><div class="t">Core　内核</div><div class="d">调度器（发现 / 装载 / 派发 / 兜底）+ 通用模块。不实现任何能力，不含领域语义。</div></div>
-      <div class="layer plugin"><div class="t">Plugin　插件</div><div class="d">每个插件是一个独立的 npm 包。</div></div>
-      <div class="layer sdk"><div class="t">SDK　契约</div><div class="d">插件与内核之间唯一的依赖，只有类型与协议。</div></div>
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+      <div class="h-28 bg-gradient-to-br from-sky-100 via-slate-50 to-white"></div>
+      <div class="p-6">
+        <div class="flex size-10 items-center justify-center rounded-xl bg-sky-600/10 text-sky-600">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="size-5">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+        <h3 class="mt-5 text-base font-semibold">完全属于你</h3>
+        <p class="mt-2.5 text-sm leading-relaxed text-slate-600">
+          装什么、用在哪，由你决定。配置跟着人走，换机器也还在。
+        </p>
+      </div>
     </div>
-  </section>
 
-  <section id="ability">
-    <p class="eyebrow">当前能力</p>
-    <h2>0.1.0 已经跑通的</h2>
-    <p class="sub">第一个插件是 <code>commit-rules</code>：自动给 commit message 补上团队约定的前缀，跳过 merge / rebase / cherry-pick，并把每次增强的命中与结果记录下来。它的作用是验证全链路——让你看到加第二个插件有多便宜。</p>
-    <ul class="clean">
-      <li><b>通用 hooks</b><span>commit-msg、prepare-commit-msg、pre-commit、pre-push、post-checkout、post-merge</span></li>
-      <li><b>一次安装，全部生效</b><span><code>install --global</code> 之后所有仓库默认被增强，单个仓库可随时停用</span></li>
-      <li><b>作用域</b><span>插件只在指定目录生效，判定由内核完成，插件无感</span></li>
-      <li><b>看得见</b><span>双通道日志按天落盘，增强行为按月归档，事后可追溯</span></li>
-      <li><b>权限模型</b><span>插件声明所需权限，未声明的能力给空实现而非报错，可降级运行</span></li>
-      <li><b>不取代现有工具</b><span>与 husky / lefthook 共存，仓库自有 hook 优先，原有链路照常执行</span></li>
-    </ul>
-  </section>
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+      <div class="h-28 bg-gradient-to-br from-rose-100 via-slate-50 to-white"></div>
+      <div class="p-6">
+        <div class="flex size-10 items-center justify-center rounded-xl bg-rose-500/10 text-rose-500">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="size-5">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <h3 class="mt-5 text-base font-semibold">从不打断</h3>
+        <p class="mt-2.5 text-sm leading-relaxed text-slate-600">
+          增强失效时静默让行。它宁可没帮上忙，也不会挡你的路。
+        </p>
+      </div>
+    </div>
 
-  <section id="start" class="tint">
-    <p class="eyebrow">上手</p>
-    <h2>三步，之后你不会再想起它</h2>
-    <pre><code><span class="c"># 1. 全局安装</span>
-<span class="p">npm install -g</span> @fxdevkit/cli
+  </div>
+</section>
 
-<span class="c"># 2. 挂载全局 hooks（一次，之后所有仓库默认被增强）</span>
-<span class="p">fxdevkit install</span> --global
+<section id="plugin" class="mx-auto max-w-6xl px-6 py-20">
+  <h2 class="text-center text-3xl font-semibold tracking-tight sm:text-4xl">它现在会做什么</h2>
+  <div class="mx-auto mt-12 max-w-3xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+    <div class="flex flex-wrap items-start justify-between gap-5">
+      <div class="min-w-[16rem] flex-1">
+        <p class="font-mono text-sm font-medium text-slate-900">commit-rules</p>
+        <p class="mt-3 text-sm leading-relaxed text-slate-600">
+          提交时自动给 commit message 补上团队约定的前缀。你照常敲 <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">git commit</code>，前缀由它加上。
+        </p>
+      </div>
+      <span class="shrink-0 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600">目前 1 个插件</span>
+    </div>
+    <div class="mt-7 border-t border-slate-100 pt-6">
+      <a href="#" class="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 transition-colors hover:text-indigo-800">
+        完整列表与用法见《插件列表》
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+          <path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</section>
 
-<span class="c"># 3. 装你需要的插件</span>
-<span class="p">fxdevkit plugin add</span> @fxdevkit/plugin-commit-rules</code></pre>
-    <p class="sub" style="margin-top:20px">之后照常工作。想知道它做了什么：</p>
-    <pre><code><span class="p">fxdevkit status</span>          <span class="c"># 当前仓库：hooks、插件、是否启用</span>
-<span class="p">fxdevkit doctor</span>          <span class="c"># 健康检查</span>
-<span class="p">fxdevkit logs</span> --last 20  <span class="c"># 最近的调度日志</span></code></pre>
-    <p class="note" style="margin-top:24px">
-      用户配置在 <code>~/.fxdevkit/config.yaml</code>，跟人走、跨升级保留。工程目录零侵入，不需要往仓库里加任何文件。
-    </p>
-  </section>
+<section id="start" class="mx-auto max-w-6xl px-6 py-20">
+  <h2 class="text-center text-3xl font-semibold tracking-tight sm:text-4xl">两步，开始变强</h2>
+  <div class="mx-auto mt-12 max-w-2xl overflow-hidden rounded-2xl bg-slate-900 px-6 py-6 shadow-lg shadow-slate-900/10">
+    <div class="flex gap-1.5 pb-4">
+      <span class="size-2.5 rounded-full bg-slate-700"></span>
+      <span class="size-2.5 rounded-full bg-slate-700"></span>
+      <span class="size-2.5 rounded-full bg-slate-700"></span>
+    </div>
+    <code class="whitespace-pre font-mono text-sm leading-loose text-slate-100">npm install -g @fxdevkit/cli
+fxdevkit install --global</code>
+  </div>
+  <p class="mt-6 text-center text-sm text-slate-500">之后你照常工作。想看它做了什么，一条命令就能查。</p>
+</section>
 
-  <section id="boundary">
-    <p class="eyebrow">边界</p>
-    <h2>不做的事，同样写进设计</h2>
-    <p class="sub">每一条边界，都对应一项你不必承担的成本。</p>
-    <table>
-      <tr><th>不做</th><th>因此不必承担</th></tr>
-      <tr><td>不替使用者决策</td><td>增强自动发生，决定权始终留在你手里</td></tr>
-      <tr><td>不做团队管控</td><td>没有流程约束，没有策略下发，不为协作场景引入任何配置</td></tr>
-      <tr><td>不做插件编排</td><td>插件各自独立，装一个不影响另一个，也不必排加载顺序</td></tr>
-      <tr><td>不代装插件</td><td>装什么、装几个由你决定；内核只负责发现，不发起网络请求</td></tr>
-      <tr><td>不为想象中的需求写代码</td><td>没有预置的签名、市场与状态机——用不到时，它们都是净成本</td></tr>
-    </table>
-    <p class="note" style="margin-top:24px">
-      对话触发、AI 大脑、MCP 接入已经进入视野。契约位置留着，实现等真实需求。
-    </p>
-  </section>
+<section class="mx-auto max-w-6xl px-6 pb-24">
+  <div class="flex flex-col items-center justify-between gap-7 rounded-3xl bg-slate-900 px-10 py-12 text-center sm:flex-row sm:text-left">
+    <div>
+      <p class="text-xl font-medium text-white">从下一次提交开始</p>
+      <p class="mt-2.5 text-sm leading-relaxed text-slate-400">不必改任何习惯，也不必往仓库里加文件。</p>
+    </div>
+    <a href="#start" class="shrink-0 rounded-xl bg-white px-6 py-3 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-100">装上试试</a>
+  </div>
+</section>
 
-</div>
-
-<footer>
-  <div class="wrap">
-    <div>fxDevKit — 人的能力增强器</div>
-    <div>内部项目，未发布 · 0.1.0 · Node ≥ 22</div>
+<footer class="border-t border-slate-200 py-10">
+  <div class="mx-auto flex max-w-6xl items-center justify-between px-6 text-sm text-slate-400">
+    <span>fxDevKit</span>
+    <span>2026</span>
   </div>
 </footer>
 
