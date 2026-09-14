@@ -1,6 +1,6 @@
 {
   "name": "@fxdevkit/core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "fxDevKit 微内核：插件管理、配置、钩子托管、事件、Server 客户端",
   "type": "module",
   "main": "dist/index.js",

@@ -2,7 +2,7 @@
 
 > 对人的增强。你需要什么能力，就装什么插件。
 
-[![version](https://img.shields.io/badge/version-0.1.0-blue)](#)
+[![version](https://img.shields.io/badge/version-1.0.0-blue)](#)
 [![node](https://img.shields.io/badge/node-%3E%3D22-green)](#)
 [![windows](https://img.shields.io/badge/platform-windows-lightgrey)](#)
 
@@ -57,7 +57,7 @@ fxdevkit install
 ### 验证
 
 ```bash
-fxdevkit --version              # 应输出 @fxdevkit/cli 0.1.0
+fxdevkit --version              # 应输出 @fxdevkit/cli 1.0.0
 fxdevkit doctor                 # 全绿 = 增强链路正常
 git commit -m "test: hello"     # commit message 应被自动加 "AI " 前缀
 ```
@@ -158,7 +158,7 @@ D:/products/devkit/
 
 ---
 
-## 当前能力（0.1.0）
+## 当前能力（1.0.0）
 
 - ✅ CLI 命令：`status` / `doctor` / `install` / `uninstall` / `disable` / `enable` / `update [version]` / `plugin` / `config` / `report` / `logs`
 - ✅ 通用 hooks：`commit-msg` / `prepare-commit-msg` / `post-checkout` / `post-merge` / `pre-commit` / `pre-push`

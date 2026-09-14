@@ -1,6 +1,6 @@
 {
   "name": "@fxdevkit/cli",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "fxDevKit 命令行入口",
   "type": "module",
   "main": "dist/index.js",
