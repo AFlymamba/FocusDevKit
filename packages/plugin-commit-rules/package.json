@@ -1,6 +1,6 @@
 {
   "name": "@fxdevkit/plugin-commit-rules",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "提交信息规则插件：按可配置规则注入或跳过 AI 前缀",
   "type": "module",
   "main": "dist/index.js",
