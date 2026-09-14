@@ -259,6 +259,11 @@ function cmdPlugin(rest: string[]): number {
         process.stderr.write('[fxdevkit] 用法：fxdevkit plugin enable <id>\n')
         return 1
       }
+      if (!activePlugins().some((plugin) => plugin.id === id)) {
+        const hinted = suggestPluginId('未知插件 id', id, (fixed) => `fxdevkit plugin enable ${fixed}`)
+        if (!hinted) process.stderr.write('[fxdevkit] 未发现任何插件\n')
+        return 1
+      }
       setPluginEnabled(id, true)
       return cmdPluginList()
     }
@@ -266,6 +271,11 @@ function cmdPlugin(rest: string[]): number {
       const id = args[0]
       if (!id) {
         process.stderr.write('[fxdevkit] 用法：fxdevkit plugin disable <id>\n')
+        return 1
+      }
+      if (!activePlugins().some((plugin) => plugin.id === id)) {
+        const hinted = suggestPluginId('未知插件 id', id, (fixed) => `fxdevkit plugin disable ${fixed}`)
+        if (!hinted) process.stderr.write('[fxdevkit] 未发现任何插件\n')
         return 1
       }
       setPluginEnabled(id, false)
@@ -379,8 +389,14 @@ function cmdLogs(rest: string[]): number {
       channel = 'plugin'
       pluginId = rest[++i]
       if (!pluginId) {
-        process.stderr.write('[fxdevkit] --plugin 需要一个插件 id，如 --plugin plugin-commit-rules\n')
+        process.stderr.write('[fxdevkit] 用法：fxdevkit logs --plugin <id>\n')
+        const ids = activePlugins().map((plugin) => plugin.id)
+        if (ids.length > 0) process.stderr.write(`[fxdevkit] 可用：${ids.join(', ')}\n`)
         return 1
+      }
+      // 不打断查询：要查的可能是已卸载插件留下的历史日志，所以只提示候选
+      if (!activePlugins().some((plugin) => plugin.id === pluginId)) {
+        suggestPluginId('未发现该插件 id', pluginId, (fixed) => `fxdevkit logs --plugin ${fixed}`)
       }
     } else if (arg === '--level') {
       const value = rest[++i]
@@ -549,6 +565,60 @@ async function cmdDoctor(): Promise<number> {
 
 function pluginTable(): DiscoveredWithReason[] {
   return discoverPlugins(findRepoRoot(process.cwd()))
+}
+
+/** 可用的插件（被跳过的除外） */
+function activePlugins(): DiscoveredWithReason[] {
+  return pluginTable().filter((plugin) => !plugin.skipped)
+}
+
+/** 简单编辑距离，用于「你是不是想输入 xxx」 */
+function editDistance(a: string, b: string): number {
+  const rows = a.length + 1
+  const cols = b.length + 1
+  const dp: number[][] = Array.from({ length: rows }, () => new Array<number>(cols).fill(0))
+  for (let i = 0; i < rows; i += 1) dp[i]![0] = i
+  for (let j = 0; j < cols; j += 1) dp[0]![j] = j
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      dp[i]![j] = Math.min(dp[i - 1]![j]! + 1, dp[i]![j - 1]! + 1, dp[i - 1]![j - 1]! + cost)
+    }
+  }
+  return dp[a.length]![b.length]!
+}
+
+/** 在候选里找一个最接近输入的值；差得太远就不猜 */
+function closestMatch(input: string, candidates: string[]): string | undefined {
+  let best: { value: string; distance: number } | null = null
+  for (const value of candidates) {
+    const distance = editDistance(input.toLowerCase(), value.toLowerCase())
+    if (!best || distance < best.distance) best = { value, distance }
+  }
+  if (!best) return undefined
+  const tolerance = Math.max(2, Math.floor(input.length / 2))
+  return best.distance <= tolerance ? best.value : undefined
+}
+
+/**
+ * 输入错了插件标识时的提示：错在哪、有哪些可用、以及一条可直接复制的完整命令。
+ *
+ * 为什么给「完整命令」而不是只给候选：终端里子进程无法把候选回填到父 shell 的
+ * 命令行上（改不了它的输入缓冲），所以能给的最接近「选中即填充」的东西，
+ * 就是一条选中即可复制的命令。
+ */
+function suggestPluginId(label: string, input: string, commandFor: (id: string) => string): boolean {
+  const plugins = activePlugins()
+  if (plugins.length === 0) return false
+
+  const ids = plugins.map((plugin) => plugin.id)
+  process.stderr.write(`[fxdevkit] ${label}：${input}\n`)
+  process.stderr.write(`[fxdevkit] 可用：${ids.join(', ')}\n`)
+
+  const guess = ids.includes(input) ? undefined : closestMatch(input, ids)
+  const pick = guess ?? (ids.length === 1 ? ids[0] : undefined)
+  if (pick && pick !== input) process.stderr.write(`[fxdevkit] 试试：${commandFor(pick)}\n`)
+  return true
 }
 
 function renderHelp(): string {
@@ -780,6 +850,10 @@ async function main(): Promise<number> {
       const plugin = findPluginCommand(command)
       if (plugin) return await runPluginCli(plugin, rest)
       process.stderr.write(`[fxdevkit] 未知命令：${command}\n`)
+      const guessName = closestMatch(command, activePlugins().map((plugin) => plugin.name))
+      if (guessName) {
+        process.stderr.write(`[fxdevkit] 试试：${['fxdevkit', guessName, ...rest].join(' ')}\n`)
+      }
       process.stdout.write(renderHelp())
       return 1
     }
