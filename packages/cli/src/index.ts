@@ -5,16 +5,16 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import YAML from 'yaml'
 import {
-  disableRepo,
+  addExclude,
   checkHooksHealth,
   dispatchHook,
   discoverPlugins,
-  enableRepo,
+  excludeList,
   findRepoRoot,
   getGlobalHooksPath,
   installGlobalHooks,
+  isDirExcluded,
   isGlobalInstalled,
-  isRepoEnabled,
   listEventMonths,
   listLogDays,
   loadConfig,
@@ -25,8 +25,10 @@ import {
   pluginScope,
   readEvents,
   readLogs,
+  removeExclude,
   runPluginCommand,
   uninstallGlobalHooks,
+  unsafeExcludeReason,
 } from '@fxdevkit/core'
 import type { DiscoveredWithReason, LogLevel } from '@fxdevkit/core'
 import type { HookName } from '@fxdevkit/sdk'
@@ -112,53 +114,72 @@ function runNpm(args: string[], cwd: string): void {
   execFileSync('npm', args, { cwd, stdio: 'inherit' })
 }
 
-function wantsGlobal(rest: string[]): boolean {
-  return rest.includes('--global') || rest.includes('-g')
-}
-
 /**
- * 安装分两层：
- *   --global  装全局 hooks（一次）：所有仓库都会走 dispatcher，且默认被增强
- *   不带参数  显式启用当前仓库（覆盖之前的 fxdevkit uninstall 停用标记）
+ * 挂载全局 hooks（机器级，一次）。
+ *
+ * 安装只有一种：写到 git 全局 core.hooksPath，所有仓库（含以后新建 / 克隆的）都会走 dispatcher。
+ * 想排除某个目录 → 在该目录下 `fxdevkit disable`（写进用户配置的 exclude，跟人走）。
  */
-function cmdInstall(rest: string[]): number {
-  if (wantsGlobal(rest)) {
-    const result = installGlobalHooks(nodePath, cliEntry)
-    process.stdout.write(`[fxdevkit] 全局 hooks 已安装：${result.hooksDir}\n`)
-    process.stdout.write(`[fxdevkit] 已托管：${result.installed.join(', ')}\n`)
-    process.stdout.write('[fxdevkit] 所有仓库（含以后新建的）现在都会被插件增强\n')
-    process.stdout.write('[fxdevkit] 想排除某个仓库 → 在该仓库内执行 fxdevkit uninstall\n')
-    return 0
-  }
-
-  const repoRoot = findRepoRoot(process.cwd())
-  if (!repoRoot) {
-    process.stderr.write('[fxdevkit] 当前目录不在 git 仓库中\n')
-    return 1
-  }
-  const result = enableRepo(repoRoot, nodePath, cliEntry)
-  process.stdout.write(`[fxdevkit] 本仓库已启用增强：${repoRoot}\n`)
-  process.stdout.write(`[fxdevkit] hooks 目录：${result.hooksDir}\n`)
-  if (result.migratedFromRepoHooksPath) {
-    process.stdout.write(
-      `[fxdevkit] 已迁移：清除本仓库旧的 core.hooksPath=${result.migratedFromRepoHooksPath}\n`,
-    )
-  }
+function cmdInstall(): number {
+  const result = installGlobalHooks(nodePath, cliEntry)
+  process.stdout.write(`[fxdevkit] 全局 hooks 已挂载：${result.hooksDir}\n`)
+  process.stdout.write(`[fxdevkit] 已托管：${result.installed.join(', ')}\n`)
+  process.stdout.write('[fxdevkit] 所有仓库（含以后新建的）现在都会被插件增强\n')
+  process.stdout.write('[fxdevkit] 想排除某个目录 → 在该目录下执行 fxdevkit disable\n')
   return 0
 }
 
-function cmdUninstall(rest: string[]): number {
-  if (wantsGlobal(rest)) {
-    uninstallGlobalHooks()
-    process.stdout.write('[fxdevkit] 已卸载全局 hooks，所有仓库均不再被增强\n')
-    return 0
-  }
+/** 卸载全局 hooks（机器级）。不动用户配置里的 exclude */
+function cmdUninstall(): number {
+  uninstallGlobalHooks()
+  process.stdout.write('[fxdevkit] 已卸载全局 hooks，所有仓库均不再被增强\n')
+  process.stdout.write('[fxdevkit] 用户配置未改动，exclude 列表保留\n')
+  return 0
+}
 
-  const repoRoot = findRepoRoot(process.cwd())
-  if (!repoRoot) return 1
-  disableRepo(repoRoot)
-  process.stdout.write(`[fxdevkit] 本仓库已停用增强：${repoRoot}\n`)
-  process.stdout.write('[fxdevkit] 全局 hooks 保留，其他仓库不受影响\n')
+/** 范围操作的目标：优先仓库根，不在仓库里就用当前目录 */
+function scopeTarget(): string {
+  return findRepoRoot(process.cwd()) ?? process.cwd()
+}
+
+/**
+ * 停用当前目录的增强：把目录写进 ~/.fxdevkit/config.yaml 的 exclude。
+ *
+ * 存在用户配置而不是仓库的 .git/config，是因为前者跟人走——换机器、
+ * 重新 clone 都不会丢。命中范围是该目录及其所有子目录。
+ */
+function cmdDisable(): number {
+  const target = scopeTarget()
+  const unsafe = unsafeExcludeReason(target)
+  if (unsafe) {
+    process.stderr.write(`[fxdevkit] ${unsafe}：${target}\n`)
+    return 1
+  }
+  const { changed, list } = addExclude(target)
+  process.stdout.write(
+    changed
+      ? `[fxdevkit] 已停用增强：${target}（含其所有子目录）\n`
+      : `[fxdevkit] ${target} 已在 exclude 中，无需重复添加\n`,
+  )
+  process.stdout.write(`[fxdevkit] exclude 共 ${list.length} 条 · ${paths.userConfig}\n`)
+  return 0
+}
+
+/** 恢复当前目录的增强：把它从 exclude 中移除 */
+function cmdEnable(): number {
+  const target = scopeTarget()
+  const { changed, list } = removeExclude(target)
+  process.stdout.write(
+    changed
+      ? `[fxdevkit] 已恢复增强：${target}\n`
+      : `[fxdevkit] ${target} 不在 exclude 中，无需恢复\n`,
+  )
+  // 覆盖它的可能是上级目录条目，明确提示，避免「我明明 enable 了却不生效」
+  const { config } = loadConfig()
+  if (isDirExcluded(config, target)) {
+    process.stdout.write('[fxdevkit] 注意：该目录仍被 exclude 里的上级目录覆盖，增强不会生效\n')
+  }
+  process.stdout.write(`[fxdevkit] exclude 共 ${list.length} 条 · ${paths.userConfig}\n`)
   return 0
 }
 
@@ -472,24 +493,23 @@ async function cmdDoctor(): Promise<number> {
         '全局 hooks',
         globalHooks ?? '未安装',
         globalOk,
-        globalOk ? undefined : '执行 fxdevkit install --global 安装全局 hooks',
+        globalOk ? undefined : '执行 fxdevkit install 挂载全局 hooks',
       ) && healthy
 
-    // ② 本仓库开关：默认启用，只有显式 fxdevkit uninstall 停用的仓库例外
-    const enabled = isRepoEnabled(repoRoot)
-    healthy =
-      doctorLine(
-        '本仓库增强',
-        enabled ? '已启用' : '已停用（用户主动）',
-        true,
-        enabled ? undefined : 'fxdevkit install 可重新启用本仓库',
-      ) && healthy
+    // ② 范围：命中 exclude 的目录不被增强，这是用户主动配置，不算故障
+    const { config } = loadConfig()
+    const excluded = isDirExcluded(config, repoRoot)
+    doctorLine(
+      '增强范围',
+      excluded ? '已排除（用户主动）' : '已覆盖',
+      true,
+      excluded ? `fxdevkit enable 可恢复本目录（exclude 见 ${paths.userConfig}）` : undefined,
+    )
 
     const dispatcher = checkDispatcher()
     healthy = doctorLine('入口有效', dispatcher.detail, dispatcher.ok, dispatcher.hint) && healthy
 
     // ③ 插件：再按作用目录过滤
-    const { config } = loadConfig()
     const plugins = discoverPlugins(repoRoot)
     if (plugins.length === 0) {
       process.stdout.write('[fxdevkit] 未发现任何插件\n')
@@ -536,12 +556,12 @@ function renderHelp(): string {
     `${SELF.name} ${SELF.version} — 研发动作背后的插件化增强层`,
     '',
     '用法:',
-    '  fxdevkit status                   查看当前状态：全局 hooks / 本仓库启用 / 插件',
+    '  fxdevkit status                   查看当前状态：全局 hooks / 增强范围 / 插件',
     '  fxdevkit doctor                   检查增强链路是否正常',
-    '  fxdevkit install --global         安装全局 hooks（一次，所有仓库都会走 dispatcher）',
-    '  fxdevkit install                  在当前仓库启用增强（未装全局 hooks 时会自动装）',
-    '  fxdevkit uninstall                在当前仓库停用增强',
-    '  fxdevkit uninstall --global       卸载全局 hooks，所有仓库均不再增强',
+    '  fxdevkit install                  挂载全局 hooks（一次，所有仓库都会走 dispatcher）',
+    '  fxdevkit uninstall                卸载全局 hooks，所有仓库均不再增强',
+    '  fxdevkit disable                  停用当前目录的增强（写进用户配置的 exclude）',
+    '  fxdevkit enable                   恢复当前目录的增强',
     '  fxdevkit update [version]          更新 fxdevkit（不带版本=最新，带版本=回退）',
     '  fxdevkit config show              打印合并后的生效配置',
     '  fxdevkit config validate          校验各插件配置',
@@ -580,16 +600,17 @@ async function cmdStatus(): Promise<number> {
   // 全局层：决定所有仓库是否走 dispatcher
   const globalOk = isGlobalInstalled()
   process.stdout.write(
-    `[fxdevkit] 全局 hooks ${globalOk ? `已安装 · ${paths.hooks}` : '未安装（fxdevkit install --global）'}\n`,
+    `[fxdevkit] 全局 hooks ${globalOk ? `已安装 · ${paths.hooks}` : '未安装（fxdevkit install）'}\n`,
   )
 
-  // 仓库层：默认启用，只有显式停用的仓库例外
+  // 范围层：命中 exclude 的目录不被增强
+  const { config } = loadConfig()
   const repoRoot = findRepoRoot(process.cwd())
   if (repoRoot) {
-    const enabled = isRepoEnabled(repoRoot)
+    const excluded = isDirExcluded(config, repoRoot)
     process.stdout.write(`[fxdevkit] 仓库 ${repoRoot}\n`)
     process.stdout.write(
-      `[fxdevkit] 增强 ${enabled ? '已启用' : '已停用（fxdevkit install 可重新启用）'}\n`,
+      `[fxdevkit] 增强 ${excluded ? '已排除（fxdevkit enable 可恢复）' : '已覆盖'}\n`,
     )
   } else {
     process.stdout.write('[fxdevkit] 当前目录不在 git 仓库中\n')
@@ -601,7 +622,6 @@ async function cmdStatus(): Promise<number> {
     return 0
   }
 
-  const { config } = loadConfig()
   process.stdout.write('[fxdevkit] 插件:\n')
   for (const plugin of plugins) {
     const scope = pluginScope(config, plugin.id, repoRoot)
@@ -716,10 +736,16 @@ async function main(): Promise<number> {
       return await cmdStatus()
 
     case 'install':
-      return cmdInstall(rest)
+      return cmdInstall()
 
     case 'uninstall':
-      return cmdUninstall(rest)
+      return cmdUninstall()
+
+    case 'disable':
+      return cmdDisable()
+
+    case 'enable':
+      return cmdEnable()
 
     case 'update':
       return cmdUpdate(rest)

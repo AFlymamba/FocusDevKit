@@ -48,7 +48,7 @@ cd packages\cli
 npm link
 
 # 3. 装全局 hooks（一次，所有仓库默认都被增强）
-fxdevkit install --global
+fxdevkit install
 ```
 
 > ⚠️ 注意用 **系统自带的 npm**（PowerShell / cmd），不要用任何 IDE 托管的 Node。
@@ -76,11 +76,11 @@ fxdevkit logs --plugin commit-rules   # 某个插件的日志
 fxdevkit doctor                  # 完整健康检查
 ```
 
-想停用某个仓库就：
+想停用某个目录就：
 
 ```bash
 cd /d/projects/xxx
-fxdevkit uninstall               # 停用本仓库（设 fxdevkit.enabled=false）
+fxdevkit disable                 # 停用本目录（写进用户配置 exclude）
 ```
 
 ---
@@ -160,10 +160,10 @@ D:/products/devkit/
 
 ## 当前能力（0.1.0）
 
-- ✅ CLI 命令：`status` / `doctor` / `install [--global]` / `uninstall [--global]` / `update [version]` / `plugin` / `config` / `report` / `logs`
+- ✅ CLI 命令：`status` / `doctor` / `install` / `uninstall` / `disable` / `enable` / `update [version]` / `plugin` / `config` / `report` / `logs`
 - ✅ 通用 hooks：`commit-msg` / `prepare-commit-msg` / `post-checkout` / `post-merge` / `pre-commit` / `pre-push`
 - ✅ 第一个插件 `commit-rules`：自动给 commit message 加 `AI ` 前缀、规则化校验
-- ✅ 全局 hooks（`core.hooksPath`）+ 仓库显式停用（`fxdevkit.enabled=false`）
+- ✅ 全局 hooks（`core.hooksPath`）+ 目录级排除（用户配置 `exclude`，跟人走）
 - ✅ 作用域（`plugins.<id>.projects`）
 - ✅ 日志追踪（双通道：`core` / `plugin`，按天落盘）
 - ✅ 事件落盘（按月 JSONL）
@@ -200,8 +200,10 @@ fxdevkit doctor
 fxdevkit logs --last 20
 
 # 装 / 卸
-fxdevkit install --global         # 装全局 hooks（一次）
-fxdevkit uninstall                # 停用本仓库
+fxdevkit install                  # 装全局 hooks（一次）
+fxdevkit uninstall                # 卸载全局 hooks
+fxdevkit disable                  # 停用本目录
+fxdevkit enable                   # 恢复本目录
 fxdevkit update                   # 更新自身（卸载：npm uninstall -g @fxdevkit/cli）
 
 # 插件管理

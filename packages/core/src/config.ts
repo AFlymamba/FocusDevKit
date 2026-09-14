@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { parse as parseYaml } from 'yaml'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { paths, readTextIfExists } from './paths.js'
 
 export interface PluginSettings {
@@ -16,6 +16,13 @@ export interface PluginSettings {
 }
 
 export interface FxDevkitConfig {
+  /**
+   * 全局排除目录（黑名单，含子目录）。
+   *
+   * 命中即不被增强，优先级高于插件自身的 `projects` 白名单。
+   * 用 `fxdevkit disable` / `enable` 维护，也可直接手改本文件。
+   */
+  exclude: string[]
   server: {
     url: string | null
     mock: boolean
@@ -32,6 +39,7 @@ export interface FxDevkitConfig {
 }
 
 const DEFAULT_CONFIG: FxDevkitConfig = {
+  exclude: [],
   server: { url: null, mock: true, timeoutMs: 3000 },
   telemetry: { enabled: true },
   hooks: { timeoutMs: 1000 },
@@ -126,5 +134,6 @@ export function writeUserConfig(patch: Record<string, unknown>): void {
   const existing = (readYamlFile(paths.userConfig) as Record<string, unknown>) ?? {}
   const merged = deepMerge(existing, patch)
   fs.mkdirSync(paths.home, { recursive: true })
-  fs.writeFileSync(paths.userConfig, JSON.stringify(merged, null, 2), 'utf8')
+  // 文件是 .yaml，就写真 YAML（JSON 虽然也是 YAML 的子集，但读起来别扭）
+  fs.writeFileSync(paths.userConfig, stringifyYaml(merged), 'utf8')
 }

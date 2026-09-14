@@ -14,15 +14,6 @@ export const MANAGED_HOOKS: HookName[] = [
 ]
 
 /**
- * 仓库级启用开关的 git config 键。
- *
- * 全局 hooks 装好后，所有仓库**默认都会被插件增强**（默认启用）。
- * 这个键只在显式设为 `false` 时表示「停用」，用于排除个别不想增强的仓库。
- * 目录级收窄请用插件的 projects 作用域，而不是逐个仓库关开关。
- */
-export const REPO_ENABLED_KEY = 'fxdevkit.enabled'
-
-/**
  * dispatcher 脚本版本。
  *
  * 版本戳写进脚本，doctor 据此判断「盘上的 hook 是不是当前版本生成的」——
@@ -186,16 +177,6 @@ export function getGlobalHooksPath(): string | null {
   return gitConfig(['--global', '--get', 'core.hooksPath'])
 }
 
-/**
- * 仓库级 core.hooksPath。旧版本逐仓库托管时留下的，用于迁移判定。
- *
- * 必须用 --local：不带作用域的 --get 会回退读到全局值，导致新仓库
- * （本身没有仓库级配置）被误判为「需要迁移」，进而去 unset 一个不存在的键。
- */
-export function getRepoHooksPath(cwd: string): string | null {
-  return gitConfig(['--local', '--get', 'core.hooksPath'], cwd)
-}
-
 export function isGlobalInstalled(): boolean {
   return getGlobalHooksPath() === paths.hooks
 }
@@ -244,54 +225,6 @@ export function installGlobalHooks(nodePath: string, cliEntry: string): InstallR
     migratedFromRepoHooksPath: null,
     ...(previousGlobal ? { previousGlobal } : {}),
   } as InstallResult & { previousGlobal?: string }
-}
-
-/**
- * 在当前仓库显式启用 fxdevkit 增强（覆盖之前的停用标记）。
- *
- * 默认所有仓库都是启用的，本函数用于把某个此前 fxdevkit uninstall
- * 停用过的仓库重新拉回增强态。全局 hooks 未装时会自动补装。
- */
-export function enableRepo(cwd: string, nodePath: string, cliEntry: string): InstallResult {
-  const previousRepoHooksPath = getRepoHooksPath(cwd)
-  let migrated: string | null = null
-
-  if (!isGlobalInstalled()) {
-    writeDispatchers(nodePath, cliEntry)
-    gitConfig(['--global', 'core.hooksPath', paths.hooks])
-  }
-
-  // 迁移：旧版本是给每个仓库单独设 core.hooksPath。现在统一走全局，
-  // 仓库级的值会盖住全局值，必须清掉，否则全局配置对它无效。
-  if (previousRepoHooksPath) {
-    try {
-      execFileSync('git', ['config', '--unset', 'core.hooksPath'], {
-        cwd,
-        stdio: ['ignore', 'ignore', 'ignore'],
-      })
-      migrated = previousRepoHooksPath
-    } catch {
-      /* 键已不存在时忽略 */
-    }
-  }
-
-  gitConfig([REPO_ENABLED_KEY, 'true'], cwd)
-
-  return {
-    hooksDir: paths.hooks,
-    installed: MANAGED_HOOKS,
-    repoEnabled: true,
-    migratedFromRepoHooksPath: migrated,
-  }
-}
-
-export function disableRepo(cwd: string): void {
-  gitConfig([REPO_ENABLED_KEY, 'false'], cwd)
-}
-
-/** 当前仓库是否启用了增强。默认启用——除非显式设 fxdevkit.enabled=false 停用 */
-export function isRepoEnabled(cwd: string): boolean {
-  return gitConfig(['--local', '--get', REPO_ENABLED_KEY], cwd) !== 'false'
 }
 
 /** 卸载全局 hooks：清 global core.hooksPath 并删除 dispatcher 脚本 */
@@ -399,16 +332,6 @@ export function runRepoOwnHook(repoRoot: string, hookName: string, args: string[
   } catch {
     return null
   }
-}
-
-/** 兼容旧调用：默认语义为「在当前仓库启用」 */
-export function installHooks(cwd: string, nodePath: string, cliEntry: string): InstallResult {
-  return enableRepo(cwd, nodePath, cliEntry)
-}
-
-/** 兼容旧调用：默认语义为「在当前仓库停用」 */
-export function uninstallHooks(cwd: string): void {
-  disableRepo(cwd)
 }
 
 /** post-checkout 里用它判断是否需要重装 */

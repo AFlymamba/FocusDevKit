@@ -10,7 +10,7 @@ import type { FxDevkitConfig } from './config.js'
  */
 
 /** 统一为可比较形式：绝对路径 + 正斜杠 + Windows 下忽略大小写 + 去尾部斜杠 */
-function normalizeForCompare(target: string): string {
+export function normalizeForCompare(target: string): string {
   let out = path.resolve(target).replace(/\\/g, '/')
   if (process.platform === 'win32') out = out.toLowerCase()
   if (out.length > 1 && out.endsWith('/')) out = out.slice(0, -1)

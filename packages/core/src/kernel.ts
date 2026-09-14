@@ -22,7 +22,8 @@ import {
   permissionSet,
   selectPlugins,
 } from './plugins.js'
-import { isRepoEnabled, runRepoOwnHook } from './hooks.js'
+import { isDirExcluded } from './exclude.js'
+import { runRepoOwnHook } from './hooks.js'
 import { createDeniedServer, createServerClient } from './server.js'
 import { pluginScope } from './scope.js'
 import { createCoreLogger, createPluginLogger } from './logger.js'
@@ -77,15 +78,15 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
       }
     }
 
-    // ② 总开关：显式停用（fxdevkit.enabled=false）的仓库不被增强
-    //    但仓库自有 hook 已执行，不受影响
+    // ② 范围判定：命中 exclude（黑名单）的目录不被增强
+    //    仓库自有 hook 已经执行过，不受影响
     if (!repoRoot) return 0
-    if (!isRepoEnabled(repoRoot)) {
-      logger.info('本仓库已停用增强，放行')
-      return 0
-    }
 
     const { config } = loadConfig()
+    if (isDirExcluded(config, repoRoot)) {
+      logger.info(`${repoRoot} 命中 exclude，放行`)
+      return 0
+    }
 
     // amend 只能在 prepare-commit-msg 判定，这里落状态供 commit-msg 消费
     if (hookName === 'prepare-commit-msg') {
