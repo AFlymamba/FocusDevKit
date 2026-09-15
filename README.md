@@ -28,7 +28,7 @@
 
 - 自动给 commit message 加团队约定前缀（`AI `、项目编号、所属领域……）
 - 自动跳过 merge / rebase / cherry-pick 的提交
-- `fxdevkit plugin-commit-rules check` 校验历史提交格式（给 CI 用）
+- `fxdevkit commit check` 校验历史提交格式（给 CI 用）
 - 自动记录「这次提交触发了什么 / 结果如何」，落到本地事件流
 
 ---
@@ -137,7 +137,7 @@ fxdevkit disable                 # 停用本目录（写进用户配置 exclude�
 | **[`docs/详细设计.md`](docs/详细设计.md)** | 实现视角：包结构、模块 API、数据流、调用链 | 30 分钟 |
 | **[`docs/命令手册.md`](docs/命令手册.md)** | 每天用的命令速查、环境变量、目录结构、FAQ | 5 分钟查询 |
 | **[`docs/修改指南.md`](docs/修改指南.md)** | 加插件 / 改 dispatch / 改 SDK / 排查问题 / 加新命令的具体步骤 | 按场景查 |
-| **[`docs/插件列表.md`](docs/插件列表.md)** | 所有插件一览；每个插件的详细文档在其包目录下（`packages/<插件>/README.md`） | 5 分钟 |
+| **[`docs/插件列表.md`](docs/插件列表.md)** | 所有插件一览；每个插件的详细文档在其包目录下（`plugins/<插件>/README.md`） | 5 分钟 |
 | **[`docs/技术方案.md`](docs/技术方案.md)** | 设计原理、未决项、里程碑、与现状的对照 | 15 分钟 |
 
 ---
@@ -146,14 +146,15 @@ fxdevkit disable                 # 停用本目录（写进用户配置 exclude�
 
 ```
 D:/products/devkit/
-├── packages/
+├── packages/               # 内核三件套，彼此单向依赖
 │   ├── cli/                # @fxdevkit/cli  — 命令行入口（bin: fxdevkit）
 │   ├── core/               # @fxdevkit/core — 内核（调度器 + 通用模块）
-│   ├── sdk/                # @fxdevkit/sdk  — 插件契约（definePlugin + 类型）
-│   └── plugin-commit-rules/  # 第一个插件：commit message 规则化改写（文档见包内 README.md）
+│   └── sdk/                # @fxdevkit/sdk  — 插件契约（definePlugin + 类型）
+├── plugins/                # 插件，每个是独立 npm 包，只依赖 sdk
+│   └── commit-rules/       # 第一个插件：commit message 规则化改写（文档见包内 README.md）
 ├── docs/                   # 全部文档（看上文「文档地图」）
 ├── scripts/                # 工具脚本（Cursor git hooks 兼容 wrapper）
-└── package.json            # npm workspaces 根
+└── package.json            # npm workspaces 根（packages/* + plugins/*）
 ```
 
 ---
