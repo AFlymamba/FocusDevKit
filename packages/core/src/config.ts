@@ -23,6 +23,14 @@ export interface FxDevkitConfig {
    * 用 `fxdevkit disable` / `enable` 维护，也可直接手改本文件。
    */
   exclude: string[]
+  /**
+   * 挂载全局 hooks 前的旧 core.hooksPath。
+   *
+   * git 的 core.hooksPath 是「替换」语义——install 直接覆盖会让用户原有的
+   * 全局 hooks 配置（其他 hook 管理器）永久丢失。install 时把旧值存这里，
+   * uninstall 时若该值指向 fxdevkit 自己就清空、否则还原，保证卸载可回滚。
+   */
+  previousHooksPath?: string | null
   server: {
     url: string | null
     mock: boolean
@@ -40,6 +48,7 @@ export interface FxDevkitConfig {
 
 const DEFAULT_CONFIG: FxDevkitConfig = {
   exclude: [],
+  previousHooksPath: null,
   server: { url: null, mock: true, timeoutMs: 3000 },
   telemetry: { enabled: true },
   hooks: { timeoutMs: 1000 },

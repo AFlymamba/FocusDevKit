@@ -136,9 +136,12 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
 
       const permissions = permissionSet(discovered.manifest)
       const pluginLogger = createPluginLogger(discovered.id)
-      const emit = hasPermission(permissions, 'events:write')
-        ? createEmitter(discovered.id, { repoRoot, branch: git.branch })
-        : createSilentEmitter()
+      // telemetry 关闭时事件不落盘（createSilentEmitter），与 events:write 权限无关：
+      // 前者是用户对数据落盘的开关，后者是插件的能力声明
+      const emit =
+        !config.telemetry.enabled || !hasPermission(permissions, 'events:write')
+          ? createSilentEmitter()
+          : createEmitter(discovered.id, { repoRoot, branch: git.branch })
       const server = hasPermission(permissions, 'net:server')
         ? createServerClient(config.server)
         : createDeniedServer(discovered.id, logger)
@@ -264,9 +267,10 @@ export async function runPluginCommand(
     config: pluginConfigValue,
     logger: pluginLogger,
     git,
-    emit: hasPermission(permissions, 'events:write')
-      ? createEmitter(pluginId, { repoRoot, branch: git.branch })
-      : createSilentEmitter(),
+    emit:
+      !config.telemetry.enabled || !hasPermission(permissions, 'events:write')
+        ? createSilentEmitter()
+        : createEmitter(pluginId, { repoRoot, branch: git.branch }),
     server: hasPermission(permissions, 'net:server')
       ? createServerClient(config.server)
       : createDeniedServer(pluginId, logger),

@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { HookName } from '@fxdevkit/sdk'
+import { loadConfig, writeUserConfig } from './config.js'
 import { ensureLayout, paths } from './paths.js'
 
 export const MANAGED_HOOKS: HookName[] = [
@@ -40,7 +41,8 @@ export const HOOK_SCRIPT_VERSION = 2
  * 用户以为插件还在工作。三级解析 + 找不到时往 stderr 打一行告警，
  * 就是为了让这种失效不再无声。
  */
-function dispatcherScript(hookName: string, nodePath: string, cliEntry: string): string {
+/** 生成 dispatcher 脚本内容（导出供体检与测试校验退出码语义） */
+export function dispatcherScript(hookName: string, nodePath: string, cliEntry: string): string {
   return [
     '#!/bin/sh',
     `# fxdevkit-hook v${HOOK_SCRIPT_VERSION} · ${hookName}`,
@@ -211,10 +213,21 @@ export interface InstallResult {
  * 一次设置，所有仓库（包括以后新建 / 克隆的）都会走 dispatcher。
  * 注意：git 的 core.hooksPath 是「替换」语义，所以 dispatcher 内部会
  * 主动执行仓库自有的 .git/hooks/<name>，不会取缔它们（见 runRepoOwnHook）。
+ *
+ * 覆盖前把用户原有的全局 core.hooksPath 存进用户配置（previousHooksPath），
+ * uninstall 时据此还原——不存的话，装一次就把用户原有的 hooks 配置永久冲掉。
  */
 export function installGlobalHooks(nodePath: string, cliEntry: string): InstallResult {
   const hooksDir = writeDispatchers(nodePath, cliEntry)
   const previousGlobal = getGlobalHooksPath()
+
+  // 首次覆盖非 fxdevkit 的旧值时记录；重复 install 覆盖的是自己的 hooks 目录，不覆盖记录
+  if (previousGlobal && previousGlobal !== paths.hooks) {
+    const { config } = loadConfig()
+    if (!config.previousHooksPath) {
+      writeUserConfig({ previousHooksPath: previousGlobal })
+    }
+  }
 
   gitConfig(['--global', 'core.hooksPath', paths.hooks])
 
@@ -227,7 +240,12 @@ export function installGlobalHooks(nodePath: string, cliEntry: string): InstallR
   } as InstallResult & { previousGlobal?: string }
 }
 
-/** 卸载全局 hooks：清 global core.hooksPath 并删除 dispatcher 脚本 */
+/**
+ * 卸载全局 hooks：清 global core.hooksPath 并删除 dispatcher 脚本。
+ *
+ * 若安装前用户另有全局 hooksPath（记录在 previousHooksPath），卸载时还原它，
+ * 让原有的 hooks 管理器（husky 全局配置等）回到安装前的状态。
+ */
 export function uninstallGlobalHooks(): void {
   try {
     execFileSync('git', ['config', '--global', '--unset', 'core.hooksPath'], {
@@ -242,6 +260,20 @@ export function uninstallGlobalHooks(): void {
     } catch {
       /* 忽略 */
     }
+  }
+
+  const { config } = loadConfig()
+  const previous = config.previousHooksPath
+  if (typeof previous === 'string' && previous !== '' && previous !== paths.hooks) {
+    // 还原用户安装前的旧值；只有当当前值仍是我们的（或已不存在）时才动手，
+    // 避免覆盖用户卸载前手动改过的配置
+    const current = getGlobalHooksPath()
+    if (current == null || current === paths.hooks) {
+      gitConfig(['--global', 'core.hooksPath', previous])
+    }
+  }
+  if (config.previousHooksPath != null) {
+    writeUserConfig({ previousHooksPath: null })
   }
 }
 
