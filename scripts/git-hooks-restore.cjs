@@ -15,9 +15,18 @@
  * 启用：在 Cursor settings.json 里配置 git.path = [node.exe, 本文件绝对路径]
  * 卸载：删掉 settings.json 里的 git.path
  *
- * 诊断：每次被调用都会向 ~/.fxdevkit/logs/wrapper.log 追加一行 JSON
- *       （含时间、cwd、参数、清理后的 GIT_CONFIG、spawn 的 git、退出码）。
- *       排查 Cursor 报"没有 Git 存储库"等问题时直接看这个文件。
+ * 诊断日志：默认**只记异常**（找不到 git、spawn 失败），写在
+ *       ~/.fxdevkit/logs/wrapper.log。
+ *
+ *       为什么不再记录每次转发：一次 git 调用写两条，Cursor 一天几百次，
+ *       攒出来 20MB / 6.7 万行，其中 99.9% 是「正常转发了」这种无用信息。
+ *       使用者真正要看的是「它什么时候坏了」，不是「它转发了什么」。
+ *
+ *       需要看转发细节（比如验证 hooksPath 有没有被洗掉）时，建一个空文件：
+ *         ~/.fxdevkit/wrapper-debug
+ *       删掉即恢复只记异常。用文件而不是环境变量，是因为 Cursor 是 spawn 本
+ *       exe 的，没法单独给它传 env（设系统变量等于永久开启），而标志文件
+ *       改完下次 git 调用就生效，不用重启 Cursor。
  */
 
 'use strict';
@@ -29,9 +38,20 @@ const { homedir } = require('node:os');
 
 const LOG_DIR = join(homedir(), '.fxdevkit', 'logs');
 const LOG_FILE = join(LOG_DIR, 'wrapper.log');
+const DEBUG_FLAG = join(homedir(), '.fxdevkit', 'wrapper-debug');
+
+/** 每次调用一次 existsSync，成本可忽略，换来「改完立即生效、不用重启 Cursor」 */
+function debugOn() {
+  try {
+    return existsSync(DEBUG_FLAG);
+  } catch {
+    return false;
+  }
+}
 
 function log(record) {
   try {
+    if (record.level !== 'error' && !debugOn()) return;
     if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
     appendFileSync(LOG_FILE, JSON.stringify({ t: new Date().toISOString(), ...record }) + '\n', 'utf8');
   } catch { /* 静默 */ }
@@ -110,8 +130,9 @@ let stderrBuf = '';
 // stdio:'inherit' 时 wrapper 看不到子进程输出，但如果用户开了日志我们也想留个底
 // —— 为保持 stdio:'inherit' 的透传优势，不切到 pipe。日志只记元信息。
 
+// 转发细节只在排查时记录（建 ~/.fxdevkit/wrapper-debug）；默认不落盘
 log({
-  level: 'info',
+  level: 'debug',
   argv: args,
   cwd: process.cwd(),
   git,
@@ -120,14 +141,15 @@ log({
   pid: child.pid,
 });
 
+// 这两处是 wrapper 自己的故障，恒记——git 命令返回非零是 git 的正常语义，不记
 child.on('error', (err) => {
   process.stderr.write('[fxdevkit git-wrapper] 启动 git 失败：' + err.message + '\n');
-  log({ level: 'error', msg: 'spawn error', err: err.message, git, cwd: process.cwd() });
+  log({ level: 'error', msg: 'spawn error', err: err.message, git, cwd: process.cwd(), argv: args });
   process.exit(1);
 });
 
 child.on('close', (code, signal) => {
-  log({ level: 'info', code, signal, argv: args, cwd: process.cwd() });
+  log({ level: 'debug', code, signal, argv: args, cwd: process.cwd() });
   if (signal) {
     process.exit(1);
   } else {

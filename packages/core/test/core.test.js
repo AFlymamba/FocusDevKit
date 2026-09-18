@@ -20,6 +20,7 @@ const {
   discoverPlugins,
   createEmitter,
   createSilentEmitter,
+  listLogDays,
   loadConfig,
   isPluginEnabled,
 } = await import('../dist/index.js')
@@ -104,6 +105,20 @@ test('事件：真实 emitter 落盘，silent emitter 不落盘', () => {
   const before = fs.readdirSync(eventsDir).length
   createSilentEmitter()('test.event', {})
   assert.equal(fs.readdirSync(eventsDir).length, before)
+})
+
+/**
+ * logs 目录下混着 wrapper.log（Cursor git wrapper 的诊断日志，不属于某一天）。
+ * 它曾经被当成「日期」列进 fxdevkit logs --days，让人以为有个叫 wrapper 的日期。
+ */
+test('日志日期：只认 YYYY-MM-DD，wrapper.log 不算一天', () => {
+  const logsDir = path.join(isolatedHome, 'logs')
+  fs.mkdirSync(logsDir, { recursive: true })
+  fs.writeFileSync(path.join(logsDir, '2026-09-17.log'), '')
+  fs.writeFileSync(path.join(logsDir, '2026-09-18.log'), '')
+  fs.writeFileSync(path.join(logsDir, 'wrapper.log'), '')
+
+  assert.deepEqual(listLogDays(), ['2026-09-17', '2026-09-18'])
 })
 
 test('配置：默认配置健全，enabled 默认为 true', () => {

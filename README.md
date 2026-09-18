@@ -132,7 +132,7 @@ fxdevkit disable                 # 停用本目录（写进用户配置 exclude�
 | 文档 | 你想了解什么 | 阅读时间 |
 |---|---|---|
 | **[`docs/概念词典.md`](docs/概念词典.md)** | manifest / apiVersion / hooks / permissions / dispatcher …这些术语都是什么意思、彼此什么关系、配什么代码位置 | 10 分钟 |
-| **[`docs/00-产品定义.md`](docs/00-产品定义.md)** | 为什么做、做什么、不做什么、跟 husky/lefthook 怎么配合 | 10 分钟 |
+| **[`docs/00-产品定义.md`](docs/00-产品定义.md)** | 为什么做、做什么、不做什么、边界在哪 | 10 分钟 |
 | **[`docs/架构设计.md`](docs/架构设计.md)** | 系统如何运转、用户视角的核心概念与决策 | 15 分钟 |
 | **[`docs/详细设计.md`](docs/详细设计.md)** | 实现视角：包结构、模块 API、数据流、调用链 | 30 分钟 |
 | **[`docs/命令手册.md`](docs/命令手册.md)** | 每天用的命令速查、环境变量、目录结构、FAQ | 5 分钟查询 |
@@ -145,13 +145,14 @@ fxdevkit disable                 # 停用本目录（写进用户配置 exclude�
 ## 项目布局
 
 ```
-D:/products/devkit/
+devkit/
 ├── packages/               # 内核三件套，彼此单向依赖
 │   ├── cli/                # @fxdevkit/cli  — 命令行入口（bin: fxdevkit）
 │   ├── core/               # @fxdevkit/core — 内核（调度器 + 通用模块）
 │   └── sdk/                # @fxdevkit/sdk  — 插件契约（definePlugin + 类型）
 ├── plugins/                # 插件，每个是独立 npm 包，只依赖 sdk
-│   └── commit-rules/       # 第一个插件：commit message 规则化改写（文档见包内 README.md）
+│   ├── commit-rules/       # commit message 规则化改写（文档见包内 README.md）
+│   └── feishu/             # 飞书入口：群里 @ 机器人 → 本机收到 → 回复原群
 ├── docs/                   # 全部文档（看上文「文档地图」）
 ├── scripts/                # 工具脚本（Cursor git hooks 兼容 wrapper）
 └── package.json            # npm workspaces 根（packages/* + plugins/*）
@@ -161,9 +162,10 @@ D:/products/devkit/
 
 ## 当前能力（1.0.0）
 
-- ✅ CLI 命令：`status` / `doctor` / `install` / `uninstall` / `disable` / `enable` / `update [version]` / `plugin` / `config` / `report` / `logs`
+- ✅ CLI 命令：`status` / `doctor` / `install` / `uninstall` / `disable` / `enable` / `update [version]` / `plugin` / `config` / `report` / `trace` / `logs`
 - ✅ 通用 hooks：`commit-msg` / `prepare-commit-msg` / `post-checkout` / `post-merge` / `pre-commit` / `pre-push`
 - ✅ 第一个插件 `plugin-commit-rules`：自动给 commit message 加 `AI ` 前缀、规则化校验
+- ✅ 第二个插件 `plugin-feishu`：群里 @ 机器人唤起本机能力（长连接，本地无需公网 IP；M1 内置 `ping` / `logs` / `help`）
 - ✅ 全局 hooks（`core.hooksPath`）+ 目录级排除（用户配置 `exclude`，跟人走）
 - ✅ 作用域（`plugins.<id>.projects`）
 - ✅ 日志追踪（双通道：`core` / `plugin`，按天落盘）
@@ -173,7 +175,8 @@ D:/products/devkit/
 
 ## 还在路上
 
-- ⏳ 第二个插件（接口变更同步 / `api-sync`）—— 验证"加插件的边际成本足够低"
+- ⏳ 飞书插件 M2：能力注册表（`skill`）+ AI 选能力，让群里一句话能唤起任意插件
+- ⏳ 第三个插件（接口变更同步 / `api-sync`）—— 验证"加插件的边际成本足够低"
 - ⏳ 插件市场 / 签名 / 可信源 —— 等真正出现第三方插件再考虑
 - ⏳ `requires` 声明 + `fxdevkit plugins --sync` —— 当前用 `plugin add` 手动替代
 

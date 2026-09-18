@@ -52,7 +52,7 @@ export function dispatcherScript(hookName: string, nodePath: string, cliEntry: s
     `[ -n "$FX_NODE" ] || FX_NODE="${nodePath}"`,
     `[ -e "$FX_NODE" ] || FX_NODE="$(command -v node 2>/dev/null)"`,
     'if [ ! -e "$FX_NODE" ]; then',
-    '  echo "[fxdevkit] 未找到可用的 node，本次增强已跳过（修复：fxdevkit install --global）" >&2',
+    '  echo "[fxdevkit] 未找到可用的 node，本次增强已跳过（修复：fxdevkit install）" >&2',
     '  exit 0',
     'fi',
     // CLI 入口已不存在 = fxdevkit 被卸载但 hooks 残留，静默放行，
@@ -104,7 +104,7 @@ export interface HooksHealth {
 export function checkHooksHealth(): HooksHealth {
   const script = path.join(paths.hooks, 'commit-msg')
   if (!fs.existsSync(script)) {
-    return { ok: false, outdated: true, detail: '未生成', hint: '执行 fxdevkit install --global' }
+    return { ok: false, outdated: true, detail: '未生成', hint: '执行 fxdevkit install' }
   }
 
   const text = fs.readFileSync(script, 'utf8')
@@ -117,7 +117,7 @@ export function checkHooksHealth(): HooksHealth {
       ok: false,
       outdated: true,
       detail: '旧版脚本（无版本戳）',
-      hint: '无法自检，执行 fxdevkit install --global 重建',
+      hint: '无法自检，执行 fxdevkit install 重建',
     }
   }
 
@@ -126,7 +126,7 @@ export function checkHooksHealth(): HooksHealth {
       ok: false,
       outdated: false,
       detail: 'CLI 入口失效',
-      hint: `${entry} 不存在，执行 fxdevkit install --global 重建`,
+      hint: `${entry} 不存在，执行 fxdevkit install 重建`,
     }
   }
 
@@ -135,7 +135,7 @@ export function checkHooksHealth(): HooksHealth {
       ok: false,
       outdated: true,
       detail: `脚本版本 v${version}（当前 v${HOOK_SCRIPT_VERSION}）`,
-      hint: '执行 fxdevkit install --global 重建',
+      hint: '执行 fxdevkit install 重建',
     }
   }
 
@@ -148,7 +148,7 @@ export function checkHooksHealth(): HooksHealth {
       ok: false,
       outdated: false,
       detail: 'Node 不可用',
-      hint: '记录路径已失效，且 PATH 中找不到 node；执行 fxdevkit install --global 重建',
+      hint: '记录路径已失效，且 PATH 中找不到 node；执行 fxdevkit install 重建',
     }
   }
 
@@ -156,7 +156,7 @@ export function checkHooksHealth(): HooksHealth {
     ok: true,
     outdated: false,
     detail: `记录路径已失效，运行时回退 ${fallback}`,
-    hint: '建议执行 fxdevkit install --global 更新记录路径',
+    hint: '建议执行 fxdevkit install 更新记录路径',
   }
 }
 

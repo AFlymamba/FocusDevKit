@@ -5,16 +5,22 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import YAML from 'yaml'
 import {
+  CORE,
+  type StateType,
   addExclude,
   checkHooksHealth,
+  createEmitter,
+  daysBetween,
   dispatchHook,
   discoverPlugins,
   excludeList,
   findRepoRoot,
   getGlobalHooksPath,
+  hoursBetween,
   installGlobalHooks,
   isDirExcluded,
   isGlobalInstalled,
+  isStateChange,
   listEventMonths,
   listLogDays,
   loadConfig,
@@ -27,10 +33,11 @@ import {
   readLogs,
   removeExclude,
   runPluginCommand,
+  summarize,
   uninstallGlobalHooks,
   unsafeExcludeReason,
 } from '@fxdevkit/core'
-import type { DiscoveredWithReason, LogLevel } from '@fxdevkit/core'
+import type { DiscoveredWithReason, FxDevkitEvent, LogLevel } from '@fxdevkit/core'
 import type { HookName } from '@fxdevkit/sdk'
 
 const cliEntry = fileURLToPath(import.meta.url)
@@ -91,6 +98,23 @@ const HOOK_NAMES: HookName[] = [
   'pre-push',
 ]
 
+/**
+ * 记一条内核状态变更（install / uninstall / enable / disable）。
+ *
+ * 为什么连命令都要落事件：这些命令改的是全局开关，改完人不会记得自己改过什么。
+ * 「AI 前缀怎么没了」这类问题，答案往往是三天前某次 uninstall / disable。
+ * 落盘开关仍受 telemetry 控制，关了就不写。
+ */
+function recordStateChange(type: StateType, payload: Record<string, unknown> = {}): void {
+  try {
+    const { config } = loadConfig()
+    if (!config.telemetry.enabled) return
+    createEmitter(CORE, { repoRoot: findRepoRoot(process.cwd()) })(type, payload)
+  } catch {
+    /* 审计失败不影响命令本身 */
+  }
+}
+
 function isHookName(value: string | undefined): value is HookName {
   return value != null && (HOOK_NAMES as string[]).includes(value)
 }
@@ -122,6 +146,7 @@ function runNpm(args: string[], cwd: string): void {
  */
 function cmdInstall(): number {
   const result = installGlobalHooks(nodePath, cliEntry)
+  recordStateChange('hooks.installed', { hooksDir: result.hooksDir, node: nodePath })
   process.stdout.write(`[fxdevkit] 全局 hooks 已挂载：${result.hooksDir}\n`)
   process.stdout.write(`[fxdevkit] 已托管：${result.installed.join(', ')}\n`)
   process.stdout.write('[fxdevkit] 所有仓库（含以后新建的）现在都会被插件增强\n')
@@ -132,6 +157,7 @@ function cmdInstall(): number {
 /** 卸载全局 hooks（机器级）。不动用户配置里的 exclude */
 function cmdUninstall(): number {
   uninstallGlobalHooks()
+  recordStateChange('hooks.uninstalled')
   process.stdout.write('[fxdevkit] 已卸载全局 hooks，所有仓库均不再被增强\n')
   process.stdout.write('[fxdevkit] 用户配置未改动，exclude 列表保留\n')
   return 0
@@ -156,6 +182,7 @@ function cmdDisable(): number {
     return 1
   }
   const { changed, list } = addExclude(target)
+  if (changed) recordStateChange('scope.disabled', { target })
   process.stdout.write(
     changed
       ? `[fxdevkit] 已停用增强：${target}（含其所有子目录）\n`
@@ -169,6 +196,7 @@ function cmdDisable(): number {
 function cmdEnable(): number {
   const target = scopeTarget()
   const { changed, list } = removeExclude(target)
+  if (changed) recordStateChange('scope.enabled', { target })
   process.stdout.write(
     changed
       ? `[fxdevkit] 已恢复增强：${target}\n`
@@ -327,6 +355,55 @@ async function cmdConfig(rest: string[]): Promise<number> {
   return 0
 }
 
+function formatDateTime(ts: string): string {
+  const d = new Date(ts)
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** 「3 天前 / 2 小时前 / 刚刚」，只用于给人看的措辞 */
+function formatAge(ts: string, now = new Date().toISOString()): string {
+  const hours = hoursBetween(ts, now)
+  if (hours < 1) return '刚刚'
+  if (hours < 24) return `${hours} 小时前`
+  const days = daysBetween(ts, now)
+  return days <= 1 ? '昨天' : `${days} 天前`
+}
+
+/** 超过这个天数没有增强记录就提示，避免「静默失效好几天才发现」 */
+const STALE_DAYS = 3
+
+/**
+ * 增强状态概览（report / trace 共用）。
+ *
+ * 只回答一个问题：最近一次「真的增强了」是什么时候。被跳过不算——
+ * 否则会给出「昨天还在生效」的假象，而实际上昨天那次提交是被拦下的。
+ */
+function writeEnhancementStatus(events: FxDevkitEvent[], staleHint: string): void {
+  const { lastHandled, lastSkipped } = summarize(events)
+
+  if (!lastHandled) {
+    process.stdout.write('[fxdevkit] 增强状态：从未记录到增强\n')
+    process.stdout.write('[fxdevkit] → hooks 可能未挂载，执行 fxdevkit doctor 确认\n')
+  } else {
+    const hook = typeof lastHandled.hook === 'string' ? lastHandled.hook : '?'
+    const pluginId = typeof lastHandled.pluginId === 'string' ? lastHandled.pluginId : '?'
+    process.stdout.write(
+      `[fxdevkit] 增强状态：最近一次 ${formatDateTime(lastHandled.ts)}（${formatAge(lastHandled.ts)}）· ${pluginId} · ${hook}\n`,
+    )
+    const days = daysBetween(lastHandled.ts, new Date().toISOString())
+    // 停摆提示要指向「下一步看什么」，而不是让人再跑一遍当前命令
+    if (days >= STALE_DAYS) process.stdout.write(`[fxdevkit] → 已 ${days} 天没有增强记录，${staleHint}\n`)
+  }
+
+  if (lastSkipped && (!lastHandled || lastSkipped.ts > lastHandled.ts)) {
+    const reason = typeof lastSkipped.reason === 'string' ? lastSkipped.reason : '?'
+    process.stdout.write(
+      `[fxdevkit] 最近跳过：${formatDateTime(lastSkipped.ts)}（${formatAge(lastSkipped.ts)}）· 原因 ${reason}\n`,
+    )
+  }
+}
+
 async function cmdReport(): Promise<number> {
   const months = listEventMonths()
   if (months.length === 0) {
@@ -334,17 +411,126 @@ async function cmdReport(): Promise<number> {
     return 0
   }
 
+  const events: FxDevkitEvent[] = []
   const counters = new Map<string, number>()
   for (const month of months) {
     for (const event of readEvents(month)) {
+      events.push(event)
       const key = `${event.plugin} · ${event.type}`
       counters.set(key, (counters.get(key) ?? 0) + 1)
     }
   }
 
+  writeEnhancementStatus(events, '执行 fxdevkit trace 查原因')
   process.stdout.write(`[fxdevkit] 事件文件：${months.join(', ')}\n`)
   for (const [key, count] of [...counters.entries()].sort()) {
     process.stdout.write(`  ${count}\t${key}\n`)
+  }
+  return 0
+}
+
+function renderTraceHelp(): string {
+  return [
+    '用法:',
+    '  fxdevkit trace                 增强回溯：最近一次生效 / 跳过 / 开关变更',
+    '  fxdevkit trace --repo <path>   只包含某个仓库的记录',
+    '  fxdevkit trace --last <n>      时间线显示最近 n 条（默认 20）',
+    '',
+    '数据来源：~/.fxdevkit/events/YYYY-MM.jsonl，与 fxdevkit report 同源',
+  ].join('\n')
+}
+
+/** Windows 路径分隔符与大小写不统一，比较前归一化 */
+function normalizeRepo(value: string): string {
+  return value.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase()
+}
+
+const TRACE_DETAIL_KEYS = ['hook', 'pluginId', 'reason', 'target', 'outcome'] as const
+
+function describeEvent(event: FxDevkitEvent): string {
+  const parts: string[] = []
+  for (const key of TRACE_DETAIL_KEYS) {
+    const value = event[key]
+    if (typeof value === 'string' && value !== '') parts.push(`${key}=${value}`)
+  }
+  return parts.join(' ')
+}
+
+function cmdTrace(rest: string[]): number {
+  let repo: string | undefined
+  let last = 20
+
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i]
+    if (arg === '--repo') {
+      repo = rest[++i]
+      if (!repo) {
+        process.stderr.write('[fxdevkit] 用法：fxdevkit trace --repo <path>\n')
+        return 1
+      }
+    } else if (arg === '--last' || arg === '-n') {
+      const n = Number(rest[++i])
+      if (!Number.isInteger(n) || n <= 0) {
+        process.stderr.write('[fxdevkit] --last 需要一个正整数\n')
+        return 1
+      }
+      last = n
+    } else if (arg === '-h' || arg === '--help') {
+      process.stdout.write(renderTraceHelp())
+      return 0
+    } else {
+      process.stderr.write(`[fxdevkit] 未知参数：${arg}\n`)
+      return 1
+    }
+  }
+
+  const months = listEventMonths()
+  let events: FxDevkitEvent[] = []
+  for (const month of months) events.push(...readEvents(month))
+  if (repo) {
+    const target = normalizeRepo(repo)
+    events = events.filter((event) => typeof event.repo === 'string' && normalizeRepo(event.repo) === target)
+  }
+
+  process.stdout.write('[fxdevkit] 增强回溯\n')
+  if (events.length === 0) {
+    process.stdout.write('[fxdevkit] 暂无事件记录\n')
+    if (repo) process.stdout.write(`[fxdevkit] 该仓库（${repo}）没有留下任何记录\n`)
+    return 0
+  }
+
+  writeEnhancementStatus(events, '见下方「最近变更」与「跳过原因分布」')
+
+  const { lastStateChange, skipReasons } = summarize(events)
+  if (lastStateChange) {
+    const target = typeof lastStateChange.target === 'string' ? ` · ${lastStateChange.target}` : ''
+    process.stdout.write(
+      `[fxdevkit] 最近变更：${formatDateTime(lastStateChange.ts)}（${formatAge(lastStateChange.ts)}）· ${lastStateChange.type}${target}\n`,
+    )
+  } else {
+    process.stdout.write('[fxdevkit] 最近变更：无（未执行过 install / uninstall / enable / disable）\n')
+  }
+
+  if (skipReasons.length > 0) {
+    process.stdout.write('\n[fxdevkit] 跳过原因分布\n')
+    for (const item of skipReasons) process.stdout.write(`  ${String(item.count).padStart(4)}  ${item.reason}\n`)
+  }
+
+  const timeline = [...events]
+    .sort((a, b) => a.ts.localeCompare(b.ts))
+    .filter((event) => event.plugin === CORE || isStateChange(event))
+    .slice(-last)
+
+  process.stdout.write(`\n[fxdevkit] 内核时间线（最近 ${timeline.length} 条）\n`)
+  if (timeline.length === 0) {
+    process.stdout.write('  （无）\n')
+    return 0
+  }
+  for (const event of timeline) {
+    const detail = describeEvent(event)
+    process.stdout.write(
+      `  ${formatDateTime(event.ts)}  ${event.plugin} · ${event.type}${detail ? `  ${detail}` : ''}\n`,
+    )
   }
   return 0
 }
@@ -636,6 +822,7 @@ function renderHelp(): string {
     '  fxdevkit config show              打印合并后的生效配置',
     '  fxdevkit config validate          校验各插件配置',
     '  fxdevkit report                   统计本地事件',
+    '  fxdevkit trace                    回溯增强何时生效 / 被跳过 / 开关变更',
     '  fxdevkit logs                     查看日志（--core / --plugin <id> / --level / --day）',
     '  fxdevkit help                     显示本帮助',
   ]
@@ -831,6 +1018,9 @@ async function main(): Promise<number> {
 
     case 'report':
       return cmdReport()
+
+    case 'trace':
+      return cmdTrace(rest)
 
     case 'logs':
       return cmdLogs(rest)

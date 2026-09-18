@@ -103,17 +103,28 @@ export function createCoreLogger(verbose = false): Logger {
   return makeLogger('core', undefined, verbose)
 }
 
-/** 某个插件的执行日志 */
-export function createPluginLogger(pluginId: string): Logger {
-  return makeLogger('plugin', pluginId, false)
+/**
+ * 某个插件的执行日志。
+ *
+ * `verbose` 控制 info/debug 是否打到 stderr（落盘不受影响，见 write 的落盘策略）：
+ *   - hook 路径传 false —— 每次提交都刷屏会污染 git 的输出
+ *   - 命令路径传 true —— 人正坐在终端前等着看结果
+ */
+export function createPluginLogger(pluginId: string, verbose = false): Logger {
+  return makeLogger('plugin', pluginId, verbose)
 }
 
-/** 列出所有日志文件对应的日期（YYYY-MM-DD，升序） */
+/**
+ * 列出所有日志文件对应的日期（YYYY-MM-DD，升序）。
+ *
+ * 只认 YYYY-MM-DD 格式：logs 目录下还放着 wrapper.log（Cursor git wrapper 的
+ * 诊断日志），它不是某一天的日志，混进日期清单会让人以为有个叫「wrapper」的日期。
+ */
 export function listLogDays(): string[] {
   try {
     return fs
       .readdirSync(paths.logs)
-      .filter((name) => name.endsWith('.log'))
+      .filter((name) => /^\d{4}-\d{2}-\d{2}\.log$/.test(name))
       .map((name) => name.replace('.log', ''))
       .sort()
   } catch {

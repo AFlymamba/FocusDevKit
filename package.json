@@ -11,9 +11,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "npm run build -w @fxdevkit/sdk && npm run build -w @fxdevkit/core && npm run build -w @fxdevkit/cli && npm run build -w @fxdevkit/plugin-commit-rules",
-    "clean": "rimraf packages/*/dist 2>/dev/null || true",
-    "test": "node --test \"packages/core/test/*.test.js\" \"plugins/commit-rules/test/*.test.js\""
+    "build": "npm run build -w @fxdevkit/sdk && npm run build -w @fxdevkit/core && npm run build -w @fxdevkit/cli && npm run build -w @fxdevkit/plugin-commit-rules && npm run build -w @fxdevkit/plugin-feishu",
+    "clean": "rimraf packages/*/dist plugins/*/dist 2>/dev/null || true",
+    "test": "node --test \"packages/core/test/*.test.js\" \"plugins/commit-rules/test/*.test.js\" \"plugins/feishu/test/*.test.js\""
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

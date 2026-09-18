@@ -14,7 +14,8 @@ import {
   isAmendInvocation,
   markAmendState,
 } from './git.js'
-import { EventBus, createEmitter, createSilentEmitter } from './events.js'
+import { type Emitter, type EmitterScope, EventBus, createEmitter, createSilentEmitter } from './events.js'
+import { CORE, EV_HANDLED, EV_SKIPPED, SKIP_REASONS } from './trace.js'
 import {
   discoverPlugins,
   hasPermission,
@@ -48,6 +49,19 @@ async function withTimeout<T>(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * 内核自己的事件发射器。
+ *
+ * 记的是「调度事实」：这次 hook 有没有真的增强、没增强是因为什么。
+ * 与插件事件区分开：插件事件 plugin 是插件 id，内核事件一律是 CORE('core')，
+ * 所以回溯时能一眼分开「插件干了什么」和「内核为什么没让它干」。
+ *
+ * telemetry 关闭时静默——落盘开关归用户，不因为要回溯就越权写文件。
+ */
+function coreEmitter(enabled: boolean, scope: EmitterScope): Emitter {
+  return enabled ? createEmitter(CORE, scope) : createSilentEmitter()
 }
 
 /**
@@ -85,6 +99,12 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
     const { config } = loadConfig()
     if (isDirExcluded(config, repoRoot)) {
       logger.info(`${repoRoot} 命中 exclude，放行`)
+      // 目录被停用也要留痕：这是「某仓库一直没增强」最常见的原因，
+      // 不记的话用户只能看到「最近一次增强停在很久以前」，却查不出是谁停的
+      coreEmitter(config.telemetry.enabled, { repoRoot })(
+        EV_SKIPPED,
+        { hook: hookName, reason: SKIP_REASONS.excluded },
+      )
       return 0
     }
 
@@ -101,23 +121,35 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
     logger.info(`声明 ${hookName} 的候选插件 ${candidates.length} 个`)
     let rejected = false
 
+    // 派发级 emitter：带分支信息，跳过与生效都记它
+    const emitCore = coreEmitter(config.telemetry.enabled, { repoRoot, branch: git.branch })
+    const skip = (pluginId: string, reason: string): void => {
+      emitCore(EV_SKIPPED, { hook: hookName, pluginId, reason })
+    }
+
     for (const discovered of candidates) {
       if (discovered.skipped) {
         logger.warn(`[${discovered.id}] 已跳过：${discovered.skipped}`)
+        skip(discovered.id, SKIP_REASONS.invalid)
         continue
       }
-      if (!isPluginEnabled(config, discovered.id)) continue
+      if (!isPluginEnabled(config, discovered.id)) {
+        skip(discovered.id, SKIP_REASONS.disabled)
+        continue
+      }
 
       // 作用目录判定：插件未配 projects 时全局生效，配了则只在该目录（含子目录）下加载
       const scope = pluginScope(config, discovered.id, repoRoot)
       if (!scope.inScope) {
         logger.debug(`[${discovered.id}] ${scope.reason}，已跳过`)
+        skip(discovered.id, SKIP_REASONS.outOfScope)
         continue
       }
 
       const definition: PluginDefinition<any> | null = await loadPlugin(discovered)
       if (!definition) {
         logger.warn(`[${discovered.id}] 加载失败，已跳过`)
+        skip(discovered.id, SKIP_REASONS.loadFailed)
         continue
       }
 
@@ -131,6 +163,7 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
         pluginConfigValue = definition.validateConfig ? definition.validateConfig(raw) : raw
       } catch (error) {
         logger.warn(`[${discovered.id}] 配置非法，已跳过：${errorMessage(error)}`)
+        skip(discovered.id, SKIP_REASONS.configInvalid)
         continue
       }
 
@@ -163,14 +196,19 @@ export async function dispatchHook(hookName: HookName, args: string[]): Promise<
         outcome = await withTimeout(handler(context), config.hooks.timeoutMs)
       } catch (error) {
         logger.warn(`[${discovered.id}] 执行异常，已放行：${errorMessage(error)}`)
+        skip(discovered.id, SKIP_REASONS.error)
         continue
       }
 
       if (outcome === TIMEOUT_MARK) {
         logger.warn(`[${discovered.id}] 执行超时（${config.hooks.timeoutMs}ms），已放行`)
+        skip(discovered.id, SKIP_REASONS.timeout)
         continue
       }
       if (outcome === 'reject') rejected = true
+      // 只有真正跑完才算「增强生效过」。被调用但被上面任何一关挡下都不算，
+      // 否则回溯会给出「昨天还在生效」的假象
+      emitCore(EV_HANDLED, { hook: hookName, pluginId: discovered.id, outcome: outcome ?? 'accept' })
       logger.info(`[${discovered.id}] 完成：${outcome ?? 'accept'}`)
     }
 
@@ -260,7 +298,8 @@ export async function runPluginCommand(
 
   const git = detectGitContext(repoRoot ?? cwd)
   const permissions = permissionSet(discovered.manifest)
-  const pluginLogger = createPluginLogger(pluginId)
+  // 命令路径：人正等着看输出，info 也要打出来（hook 路径仍然是静默的）
+  const pluginLogger = createPluginLogger(pluginId, true)
 
   const context: CommandContext<any> = {
     pluginId,

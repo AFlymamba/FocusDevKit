@@ -1,0 +1,29 @@
+{
+  "name": "@fxdevkit/plugin-feishu",
+  "version": "0.1.0",
+  "description": "飞书入口插件：群里 @ 机器人，唤起本机插件能力",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fxdevkit/sdk": "*",
+    "@larksuiteoapi/node-sdk": "^1.24.0"
+  },
+  "fxdevkit": {
+    "id": "plugin-feishu",
+    "name": "feishu",
+    "apiVersion": 1,
+    "commands": ["serve"],
+    "permissions": ["events:write", "net:server", "fs:global", "proc:exec"]
+  }
+}
