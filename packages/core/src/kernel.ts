@@ -1,12 +1,19 @@
 import type {
   CommandContext,
+  ConfigStore,
   HookContext,
   HookName,
   HookOutcome,
   Logger,
   PluginDefinition,
 } from '@fxdevkit/sdk'
-import { type FxDevkitConfig, isPluginEnabled, loadConfig, pluginConfig } from './config.js'
+import {
+  type FxDevkitConfig,
+  isPluginEnabled,
+  loadConfig,
+  pluginConfig,
+  writeUserConfig,
+} from './config.js'
 import {
   consumeAmendState,
   detectGitContext,
@@ -301,6 +308,20 @@ export async function runPluginCommand(
   // 命令路径：人正等着看输出，info 也要打出来（hook 路径仍然是静默的）
   const pluginLogger = createPluginLogger(pluginId, true)
 
+  // 配置写回限定在 plugins.<自身 id> 下，插件碰不到全局配置，也碰不到别人的配置。
+  // 未声明 fs:global 时降到空实现 + warn——这是「未声明给空实现而非报错」的能力识别约定。
+  const configStore: ConfigStore = hasPermission(permissions, 'fs:global')
+    ? {
+        set: (patch) => {
+          writeUserConfig({ plugins: { [pluginId]: patch } })
+        },
+      }
+    : {
+        set: () => {
+          logger.warn(`插件 ${pluginId} 未声明 fs:global 权限，配置未被保存`)
+        },
+      }
+
   const context: CommandContext<any> = {
     pluginId,
     config: pluginConfigValue,
@@ -314,6 +335,7 @@ export async function runPluginCommand(
       ? createServerClient(config.server)
       : createDeniedServer(pluginId, logger),
     permissions,
+    configStore,
   }
 
   try {

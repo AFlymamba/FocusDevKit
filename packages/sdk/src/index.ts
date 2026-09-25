@@ -93,6 +93,23 @@ export interface HookContext<C = unknown> {
 
 export type HookOutcome = 'accept' | 'reject' | 'modify' | void
 
+/**
+ * 插件自己的配置存储。
+ *
+ * 写入范围被内核硬限制在 `plugins.<自身 id>` 节点下——插件既碰不到全局
+ * 配置（exclude / hooks / telemetry），也碰不到其他插件的配置。
+ * 这是「边界识别」的一部分：数据结构由插件定，作用域由内核定。
+ */
+export interface ConfigStore {
+  /**
+   * 浅合并写回用户配置（`~/.fxdevkit/config.yaml` 的 `plugins.<自身 id>` 节点）。
+   *
+   * 未声明 `fs:global` 权限时是空实现：不报错，也不落盘，由内核打一条 warn。
+   * 这样插件不需要为「有没有权限」写两套分支。
+   */
+  set(patch: Record<string, unknown>): void
+}
+
 export interface CommandContext<C = unknown> {
   pluginId: string
   config: C
@@ -101,6 +118,8 @@ export interface CommandContext<C = unknown> {
   emit(type: string, payload: Record<string, unknown>): void
   server: ServerClient
   permissions: ReadonlySet<Permission>
+  /** 持久化插件自身的配置。仅命令路径提供，hook 路径没有（hook 必须是只读的） */
+  configStore: ConfigStore
 }
 
 export interface CommandSpec<C = unknown> {

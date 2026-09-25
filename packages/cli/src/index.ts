@@ -958,8 +958,11 @@ async function runPluginCli(discovered: DiscoveredWithReason, argv: string[]): P
       return 0
     }
     process.stdout.write('用法:\n')
+    const definition = await loadPlugin(discovered)
     for (const command of commands) {
-      process.stdout.write(`  fxdevkit ${discovered.name} ${command}\n`)
+      const line = `  fxdevkit ${discovered.name} ${command}`
+      const describe = definition?.commands?.[command]?.describe
+      process.stdout.write(describe ? `${line.padEnd(34)}${describe}\n` : `${line}\n`)
     }
     return 0
   }

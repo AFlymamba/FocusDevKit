@@ -23,6 +23,7 @@ const {
   listLogDays,
   loadConfig,
   isPluginEnabled,
+  runPluginCommand,
 } = await import('../dist/index.js')
 
 /**
@@ -129,4 +130,57 @@ test('配置：默认配置健全，enabled 默认为 true', () => {
   assert.deepEqual(config.exclude, ['D:/projects/legacy'])
   assert.equal(isPluginEnabled(config, '不存在的插件'), true)
   assert.equal(isPluginEnabled({ plugins: { 'plugin-x': { enabled: false } } }, 'plugin-x'), false)
+})
+
+/**
+ * configStore 是插件唯一能持久化自己配置的通道。
+ * 两条约束都在这里锁住：
+ *   1. 写出的内容只能落在 plugins.<自身 id> 下——插件碰不到全局配置，也碰不到别人的
+ *   2. 未声明 fs:global 时是空实现，不落盘（不是抛错，插件不需要写两套分支）
+ */
+test('配置写回：写入被限制在自身命名空间，未声明 fs:global 时不落盘', async () => {
+  const mkWriter = (dirName, id, permissions) => {
+    const dir = path.join(isolatedHome, 'plugins', dirName)
+    fs.mkdirSync(path.join(dir, 'dist'), { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({
+        name: `@fxdevkit/${id}`,
+        version: '0.1.0',
+        main: 'dist/index.js',
+        fxdevkit: { id, apiVersion: 1, commands: ['write'], permissions },
+      }),
+    )
+    fs.writeFileSync(
+      path.join(dir, 'dist', 'index.js'),
+      `export default {
+  id: ${JSON.stringify(id)},
+  commands: {
+    write: {
+      handler(_argv, ctx) {
+        ctx.configStore.set({ rules: [{ name: 'x' }], exclude: ['/evil'] })
+        return 0
+      },
+    },
+  },
+}
+`,
+    )
+  }
+
+  mkWriter('fxdevkit-plugin-writer', 'plugin-writer', ['fs:global'])
+  mkWriter('fxdevkit-plugin-noperm', 'plugin-noperm', [])
+
+  assert.equal(await runPluginCommand('plugin-writer', 'write', []), 0)
+  assert.equal(await runPluginCommand('plugin-noperm', 'write', []), 0)
+
+  const { config } = loadConfig()
+  const written = config.plugins['plugin-writer']
+  assert.deepEqual(written?.rules, [{ name: 'x' }])
+  // 想借 patch 写全局 exclude 也只会落在自己命名空间下
+  assert.deepEqual(written?.exclude, ['/evil'])
+  assert.ok(!(config.exclude ?? []).includes('/evil'), '全局 exclude 不应被插件写入')
+
+  // 未授权：静默空实现，配置里连键都不该出现
+  assert.equal(config.plugins['plugin-noperm'], undefined)
 })
