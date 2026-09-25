@@ -23,7 +23,7 @@
     "name": "commit",
     "apiVersion": 1,
     "hooks": ["commit-msg"],
-    "commands": ["check"],
-    "permissions": ["events:write", "git:read", "fs:repo", "proc:exec"]
+    "commands": ["check", "rules", "prefix"],
+    "permissions": ["events:write", "git:read", "fs:repo", "fs:global", "proc:exec"]
   }
 }

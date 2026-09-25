@@ -19,10 +19,21 @@ interface CommitRulesConfig {
   dryRun: boolean
 }
 
+/**
+ * 默认规则的判据：这次提交在 git 历史图里是不是一个「工作单元」。
+ *
+ * - `git revert` 是单 parent、有自己 diff 的普通提交，是一次真实的状态变更（而且是最需要
+ *   追溯的一类），所以**要打标**。
+ * - merge commit 是拓扑节点，作用是连接两条分支，本身不代表新工作，所以不打标。
+ *   提交时它由流程守卫（isMerge）拦下，这条规则是给 CI 的 `check` 用的——那个场景没有
+ *   git 上下文，只能看 message，而 git 的 merge message 格式是固定的。
+ * - 其余（含 `chore:` / `docs:`）一律打标：前缀标记的是「这次提交发生在 AI 增强环境下」，
+ *   不是「这次改动是不是代码」。文档也是资产，混合提交时 type 由人主观挑，拿它当判据不可靠。
+ */
 const DEFAULT_CONFIG: CommitRulesConfig = {
   rules: [
-    { name: 'ai-explicit', pattern: '^(AI|ai)[:\\s]', action: 'skip' },
-    { name: 'no-ai', pattern: '^(chore|docs|merge|revert)[:\\s]', action: 'skip' },
+    { name: 'default-guard', pattern: '^(AI|ai)[:\\s]', action: 'skip' },
+    { name: 'git-merge', pattern: '^Merge ', action: 'skip' },
     { name: 'default', action: 'prefix', value: 'AI ' },
   ],
   branches: ['*'],
@@ -116,6 +127,55 @@ function applyRule(rule: Rule, original: string, firstLine: string): string {
     default:
       return original
   }
+}
+
+/**
+ * 按注入值生成幂等守卫的 pattern。
+ *
+ * 守卫必须能认出「本规则注入之后的样子」，否则同一条 message 被二次处理会重复注入。
+ * 结尾的 `[:\\s]*` 是为了兼容手写时省略空格的写法（`[AI-GEN]: xxx`）。
+ */
+function guardPattern(value: string): string {
+  return `^${escapeRegExp(value.trim())}[:\\s]*`
+}
+
+function isFallback(rule: Rule): boolean {
+  return !rule.pattern && rule.action !== 'skip'
+}
+
+/**
+ * 换掉兜底规则注入的前缀，连带处理两件必须一起做的事：
+ *
+ *   1. 幂等守卫：注入值必须能被某条 skip 规则匹配，否则重复注入
+ *   2. 旧前缀放行：换成新前缀后，历史提交在 check 里不能被判不合规
+ *
+ * 这两件事如果交给用户手改，几乎必然漏掉——所以封成一条命令，不开放逐步配置。
+ */
+function setFallbackPrefix(rules: Rule[], value: string): Rule[] {
+  const withoutGuard = rules.filter((rule) => rule.name !== 'default-guard')
+  const previous = withoutGuard.find(isFallback)
+
+  let next: Rule[]
+  if (previous) {
+    next = withoutGuard.map((rule) => (isFallback(rule) ? { ...rule, action: 'prefix', value } : rule))
+  } else {
+    next = [...withoutGuard, { name: 'default', action: 'prefix', value }]
+  }
+
+  const stale = previous?.value
+  if (stale && stale !== value) {
+    const probe = `${stale}fix: something`
+    const covered = withoutGuard.some(
+      (rule) => rule.action === 'skip' && rule.pattern && new RegExp(rule.pattern).test(probe),
+    )
+    if (!covered) {
+      const seq = next.filter((rule) => rule.name.startsWith('legacy-')).length + 1
+      next = [...next, { name: `legacy-${seq}`, pattern: guardPattern(stale), action: 'skip' }]
+    }
+  }
+
+  // 守卫放最前：它是机器生成的幂等保护，必须优先于其他规则命中才可靠
+  return [{ name: 'default-guard', pattern: guardPattern(value), action: 'skip' }, ...next]
 }
 
 export default definePlugin<CommitRulesConfig>({
@@ -263,6 +323,70 @@ export default definePlugin<CommitRulesConfig>({
         ctx.logger.error(`不符合规则：${firstLine}`)
         ctx.logger.error(`期望形如：${expected}`)
         return 1
+      },
+    },
+
+    rules: {
+      describe: '列出生效的规则与来源',
+      handler(_argv, ctx) {
+        const { rules, branches, dryRun } = ctx.config
+        const overridden = JSON.stringify(rules) !== JSON.stringify(DEFAULT_CONFIG.rules)
+        ctx.logger.info(`生效规则 ${rules.length} 条（来源：${overridden ? '用户配置' : '插件默认'}）`)
+        for (const [index, rule] of rules.entries()) {
+          const order = `${index + 1}.`.padStart(3)
+          const name = rule.name.padEnd(18)
+          const action = rule.action.padEnd(8)
+          if (rule.pattern) ctx.logger.info(`${order} ${name}${action}/${rule.pattern}/`)
+          else ctx.logger.info(`${order} ${name}${action}"${rule.value}"  ← 兜底`)
+        }
+        ctx.logger.info(`branches: ${branches.join(', ')}   dryRun: ${dryRun}`)
+        ctx.logger.info('手改位置：~/.fxdevkit/config.yaml 的 plugins.plugin-commit-rules.rules')
+        return 0
+      },
+    },
+
+    prefix: {
+      describe: '设置兜底前缀，同步维护幂等守卫与旧前缀放行规则',
+      handler(argv, ctx) {
+        const flags = argv.filter((arg) => arg.startsWith('-'))
+        if (flags.length > 0) {
+          ctx.logger.error(`未知参数：${flags.join(' ')}`)
+          ctx.logger.error('用法：fxdevkit commit prefix "AI "')
+          return 1
+        }
+
+        const value = argv.join(' ')
+        if (value.trim() === '') {
+          ctx.logger.error('缺少前缀值')
+          ctx.logger.error('用法：fxdevkit commit prefix "AI "')
+          return 1
+        }
+
+        const current = ctx.config.rules
+        const next = setFallbackPrefix(current, value)
+        // 自己拼出来的规则再走一遍幂等校验，兜到就兜到这里，别落到 hook 里才发现
+        assertIdempotent(next)
+
+        ctx.configStore.set({ rules: next })
+        ctx.logger.info(`已写入兜底前缀："${value}"`)
+        ctx.logger.info('同步维护：')
+        ctx.logger.info(`  幂等守卫  default-guard  /${guardPattern(value)}/`)
+
+        const added = next.filter((rule) => !current.some((old) => old.name === rule.name))
+        const fallbackAdded = added.some((rule) => rule.name === 'default')
+        for (const rule of added) {
+          if (!rule.name.startsWith('legacy-')) continue
+          ctx.logger.info(`  历史放行  ${rule.name}  /${rule.pattern}/  ← 旧前缀的提交仍判合规`)
+        }
+        if (fallbackAdded) ctx.logger.info(`  兜底规则  default  "${value}"（原先没有兜底规则，已新增）`)
+
+        if (!/\s$/.test(value)) {
+          ctx.logger.warn(
+            `前缀不以空白结尾：结果形如「${value}fix: xxx」，且守卫会挡掉所有以「${value.trim()}」开头的提交`,
+          )
+        }
+        ctx.logger.warn('写回是整体序列化，~/.fxdevkit/config.yaml 里原有的注释会被清掉')
+        return 0
       },
     },
   },
