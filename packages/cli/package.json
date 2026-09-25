@@ -1,6 +1,11 @@
 {
   "name": "@fxdevkit/cli",
   "version": "1.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AFlymamba/FocusDevKit.git"
+  },
   "description": "fxDevKit 命令行入口",
   "type": "module",
   "main": "dist/index.js",

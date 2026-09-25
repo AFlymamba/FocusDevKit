@@ -1,6 +1,11 @@
 {
   "name": "@fxdevkit/plugin-commit-rules",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AFlymamba/FocusDevKit.git"
+  },
   "description": "提交信息规则插件：按可配置规则注入或跳过 AI 前缀",
   "type": "module",
   "main": "dist/index.js",

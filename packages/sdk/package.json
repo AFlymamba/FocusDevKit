@@ -1,6 +1,11 @@
 {
   "name": "@fxdevkit/sdk",
   "version": "1.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AFlymamba/FocusDevKit.git"
+  },
   "description": "fxDevKit 插件开发 SDK：协议类型与 definePlugin",
   "type": "module",
   "main": "dist/index.js",

@@ -1,6 +1,11 @@
 {
   "name": "fxdevkit-monorepo",
   "version": "1.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AFlymamba/FocusDevKit.git"
+  },
   "private": true,
   "type": "module",
   "workspaces": [

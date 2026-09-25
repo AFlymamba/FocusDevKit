@@ -1,6 +1,11 @@
 {
   "name": "@fxdevkit/plugin-feishu",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AFlymamba/FocusDevKit.git"
+  },
   "description": "飞书入口插件：群里 @ 机器人，唤起本机插件能力",
   "type": "module",
   "main": "dist/index.js",
