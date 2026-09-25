@@ -28,6 +28,8 @@
 
 - 自动给 commit message 加团队约定前缀（`AI `、项目编号、所属领域……）
 - 自动跳过 merge / rebase / cherry-pick 的提交
+- `fxdevkit commit prefix "[AI-GEN] "` 换前缀（连带维护幂等守卫与历史提交放行）
+- `fxdevkit commit rules` 列出生效的规则与来源
 - `fxdevkit commit check` 校验历史提交格式（给 CI 用）
 - 自动记录「这次提交触发了什么 / 结果如何」，落到本地事件流
 
@@ -128,6 +130,7 @@ fxdevkit disable                 # 停用本目录（写进用户配置 exclude�
 > 了解有哪些插件：**插件列表.md**。
 > 写插件：**概念词典 → 架构设计 §3 → 修改指南 §1**。
 > 改内核：**架构设计 → 详细设计 → 修改指南 §2-5**。
+> 继续开发 / 换机器恢复上下文：**90-开发记录.md**（决策、待办、已知缺口）。
 
 | 文档 | 你想了解什么 | 阅读时间 |
 |---|---|---|
@@ -139,6 +142,7 @@ fxdevkit disable                 # 停用本目录（写进用户配置 exclude�
 | **[`docs/修改指南.md`](docs/修改指南.md)** | 加插件 / 改 dispatch / 改 SDK / 排查问题 / 加新命令的具体步骤 | 按场景查 |
 | **[`docs/插件列表.md`](docs/插件列表.md)** | 所有插件一览；每个插件的详细文档在其包目录下（`plugins/<插件>/README.md`） | 5 分钟 |
 | **[`docs/技术方案.md`](docs/技术方案.md)** | 设计原理、未决项、里程碑、与现状的对照 | 15 分钟 |
+| **[`docs/90-开发记录.md`](docs/90-开发记录.md)** | 已拍板的决策、待办、已知缺口。继续开发或换机器时先读这份 | 5 分钟 |
 
 ---
 
@@ -217,7 +221,9 @@ fxdevkit plugin enable xxx
 fxdevkit plugin disable xxx
 
 # 跑插件命令
-fxdevkit commit check             # 触发 plugin-commit-rules 的 check 子命令
+fxdevkit commit rules             # 当前生效的规则与来源
+fxdevkit commit prefix "[AI-GEN] "  # 换前缀（连带维护幂等守卫与历史提交放行）
+fxdevkit commit check             # 校验提交格式（CI 用，不改任何东西）
 ```
 
 完整命令见 [`docs/命令手册.md`](docs/命令手册.md)。
