@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@source "../index.html";
+
+@theme {
+  --font-sans: "Microsoft YaHei", "Microsoft YaHei UI", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+}

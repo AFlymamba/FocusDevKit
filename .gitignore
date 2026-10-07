@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.log
+*.bak
+.DS_Store
+.devkit-local/
+.chrometmp/
+.shot*.png
+
+# 打包产物：由 scripts/git-hooks-restore.cjs 本地生成，不入库
+*.exe

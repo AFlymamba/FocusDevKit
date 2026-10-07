@@ -1,0 +1,28 @@
+{
+  "name": "fxdevkit-monorepo",
+  "version": "1.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AFlymamba/FocusDevKit.git"
+  },
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "plugins/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build -w @fxdevkit/sdk && npm run build -w @fxdevkit/core && npm run build -w @fxdevkit/cli && npm run build -w @fxdevkit/plugin-commit-rules && npm run build -w @fxdevkit/plugin-feishu",
+    "clean": "rimraf packages/*/dist plugins/*/dist 2>/dev/null || true",
+    "test": "node --test \"packages/core/test/*.test.js\" \"plugins/commit-rules/test/*.test.js\" \"plugins/feishu/test/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "yaml": "^2.5.0"
+  }
+}
